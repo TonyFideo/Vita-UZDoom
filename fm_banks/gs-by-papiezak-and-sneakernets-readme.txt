@@ -2,9 +2,6 @@
 https://github.com/sneakernets/DMXOPN2
 https://github.com/papiezak/DMXOPN2
 =============
-License: MIT License
-https://github.com/sneakernets/DMXOPN2/blob/master/LICENSE
-=============
 
 == DMXOPN2 ==
 

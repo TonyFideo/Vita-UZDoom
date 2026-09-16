@@ -12,7 +12,6 @@ INTERFACE
 	mididevices/music_opl_mididevice.cpp
 	mididevices/music_opnmidi_mididevice.cpp
 	mididevices/music_timiditypp_mididevice.cpp
-	mididevices/music_fluidsynth_mididevice.cpp
 	mididevices/music_softsynth_mididevice.cpp
 	mididevices/music_timidity_mididevice.cpp
 	mididevices/music_wildmidi_mididevice.cpp
@@ -42,6 +41,10 @@ INTERFACE
 	
 	loader/test.c
 )
+
+if(ZMUSIC_ENABLE_FLUIDSYNTH)
+	target_sources(zmusic-obj INTERFACE mididevices/music_fluidsynth_mididevice.cpp)
+endif()
 
 file(GLOB HEADER_FILES
 	zmusic/*.h
@@ -164,8 +167,13 @@ use_fast_math(zmusiclite)
 target_include_directories(zmusic INTERFACE $<INSTALL_INTERFACE:include> $<BUILD_INTERFACE:${ZMusic_SOURCE_DIR}/include>)
 target_include_directories(zmusiclite INTERFACE $<INSTALL_INTERFACE:include> $<BUILD_INTERFACE:${ZMusic_SOURCE_DIR}/include>)
 
-target_link_libraries_hidden(zmusic zmusic-obj adl oplsynth opn timidity timidityplus wildmidi fluidsynth)
-target_link_libraries_hidden(zmusiclite zmusic-obj fluidsynth)
+if(ZMUSIC_ENABLE_FLUIDSYNTH)
+	target_link_libraries_hidden(zmusic zmusic-obj adl oplsynth opn timidity timidityplus wildmidi fluidsynth)
+	target_link_libraries_hidden(zmusiclite zmusic-obj fluidsynth)
+else()
+	target_link_libraries_hidden(zmusic zmusic-obj adl oplsynth opn timidity timidityplus wildmidi)
+	target_link_libraries_hidden(zmusiclite zmusic-obj)
+endif()
 
 target_compile_definitions(zmusic PUBLIC $<$<STREQUAL:$<TARGET_PROPERTY:zmusic,TYPE>,STATIC_LIBRARY>:ZMUSIC_STATIC>)
 target_compile_definitions(zmusiclite PRIVATE ZMUSIC_LITE=1 PUBLIC $<$<STREQUAL:$<TARGET_PROPERTY:zmusiclite,TYPE>,STATIC_LIBRARY>:ZMUSIC_STATIC>)

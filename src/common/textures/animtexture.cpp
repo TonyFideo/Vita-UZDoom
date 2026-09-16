@@ -25,7 +25,9 @@
 #include "bitmap.h"
 #include "texturemanager.h"
 
+#ifdef USE_LIBVPX
 #include "vpx/vpx_image.h"
+#endif
 
 
 //==========================================================================
@@ -76,6 +78,7 @@ void AnimTexture::SetFrame(const uint8_t* Palette, const void* data_)
 				dpix += 4;
 			}
 		}
+		#ifdef USE_LIBVPX
 		else if(pixelformat == VPX)
 		{
 			const vpx_image_t *img = reinterpret_cast<const vpx_image_t *>(data_);
@@ -154,6 +157,7 @@ void AnimTexture::SetFrame(const uint8_t* Palette, const void* data_)
 				}
 			}
 		}
+		#endif
 		else if(pixelformat == RGB)
 		{
 			const uint8_t *img = reinterpret_cast<const uint8_t *>(data_);

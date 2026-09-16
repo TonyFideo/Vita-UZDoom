@@ -1,9 +1,0 @@
-set(OPN_MODELS_SOURCES
-    ${CMAKE_CURRENT_LIST_DIR}/opn_models.h
-    ${CMAKE_CURRENT_LIST_DIR}/model_generic.c
-    ${CMAKE_CURRENT_LIST_DIR}/model_freq_opn2.c
-    ${CMAKE_CURRENT_LIST_DIR}/model_freq_opna.c
-    ${CMAKE_CURRENT_LIST_DIR}/model_dmx.c
-    ${CMAKE_CURRENT_LIST_DIR}/model_apogee.c
-    ${CMAKE_CURRENT_LIST_DIR}/model_w9x.c
-)

@@ -909,6 +909,10 @@ FString _NicePath(FString path)
 	if (path.IsEmpty()) return ".";
 #ifdef _WIN32
 	return ExpandEnvVars(path.GetChars());
+#elif defined(VITA)
+	// Vita has no passwd database. Keep environment expansion (including
+	// $PROGDIR) and leave unsupported '~user' expansion to the caller.
+	return ExpandEnvVars(path.GetChars());
 #else
 	if (path.Front() != '~')
 	{

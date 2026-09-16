@@ -134,6 +134,7 @@ const char *KeyNames[NUM_KEYS] =
 	"Pad_A",       "Pad_B",      "Pad_X",        "Pad_Y",      //
 	"Paddle_1",    "Paddle_2",   "Paddle_3",     "Paddle_4",   //
 	"Guide",       "Pad_Misc",   "Pad_Touchpad",               //
+	"BackTouch_Left", "BackTouch_Right", "BackTouch_Hold",       //
 };
 
 CVAR(Int, cl_doubleclickthreshold, 225, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
@@ -885,6 +886,11 @@ void C_BindDefaults(const TArray<int> *filter = nullptr)
 		cl_defaultconfiguration == 1 ? "engine/origbinds.txt" : cl_defaultconfiguration == 2 ? "engine/leftbinds.txt" : "engine/defbinds.txt",
 		filter
 	);
+#if defined(VITA)
+	// Vita uses the same SDL controller events as desktop builds, but its
+	// physical layout is different and also exposes a back touch surface.
+	C_SetDefaultKeys("engine/vitabinds.txt", filter);
+#endif
 }
 
 void C_SetDefaultBindings(const TArray<int> *filter)

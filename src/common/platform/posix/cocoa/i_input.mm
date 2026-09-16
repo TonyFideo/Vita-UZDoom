@@ -42,7 +42,6 @@
 EXTERN_CVAR(Int, m_use_mouse)
 
 CVAR(Bool, use_mouse,    true,  CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
-CVAR(Bool, allow_set_mouse_pos,    false,  CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 
 CVAR(Bool, k_allowfullscreentoggle, true, CVAR_ARCHIVE | CVAR_GLOBALCONFIG)
 
@@ -80,11 +79,6 @@ void SetCursorPosition(const NSPoint position)
 {
 	NSWindow* window = [NSApp keyWindow];
 	if (nil == window)
-	{
-		return;
-	}
-
-	if (!allow_set_mouse_pos)
 	{
 		return;
 	}

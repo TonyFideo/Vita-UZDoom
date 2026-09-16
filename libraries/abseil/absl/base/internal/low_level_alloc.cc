@@ -36,6 +36,64 @@
 // LowLevelAlloc.
 #ifndef ABSL_LOW_LEVEL_ALLOC_MISSING
 
+#if defined(__vita__)
+
+// VitaSDK does not expose POSIX mmap, but Abseil's low-level allocator is
+// still useful for its synchronization internals (Mutex thread identities and
+// debug bookkeeping).  A malloc-backed arena is sufficient for those users:
+// it preserves the allocator ABI without pretending that Vita has mmap.
+#include <stdlib.h>
+
+namespace absl {
+ABSL_NAMESPACE_BEGIN
+namespace base_internal {
+
+struct LowLevelAlloc::Arena {};
+
+namespace {
+LowLevelAlloc::Arena default_arena;
+}
+
+void *LowLevelAlloc::Alloc(size_t request) {
+  return request == 0 ? nullptr : malloc(request);
+}
+
+void *LowLevelAlloc::AllocWithArena(size_t request, Arena *) {
+  return Alloc(request);
+}
+
+void LowLevelAlloc::Free(void *ptr) {
+  free(ptr);
+}
+
+LowLevelAlloc::Arena *LowLevelAlloc::NewArena(uint32_t) {
+  return static_cast<Arena *>(malloc(sizeof(Arena)));
+}
+
+bool LowLevelAlloc::DeleteArena(Arena *arena) {
+  if (arena == nullptr || arena == &default_arena) {
+    return false;
+  }
+  free(arena);
+  return true;
+}
+
+LowLevelAlloc::Arena *LowLevelAlloc::DefaultArena() {
+  return &default_arena;
+}
+
+LowLevelAlloc::Arena *SigSafeArena() {
+  return &default_arena;
+}
+
+void InitSigSafeArena() {}
+
+}  // namespace base_internal
+ABSL_NAMESPACE_END
+}  // namespace absl
+
+#else  // __vita__
+
 #ifndef _WIN32
 #include <pthread.h>
 #include <signal.h>
@@ -658,4 +716,5 @@ void *LowLevelAlloc::AllocWithArena(size_t request, Arena *arena) {
 ABSL_NAMESPACE_END
 }  // namespace absl
 
+#endif  // __vita__
 #endif  // ABSL_LOW_LEVEL_ALLOC_MISSING

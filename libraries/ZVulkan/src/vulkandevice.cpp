@@ -16,8 +16,6 @@ VulkanDevice::VulkanDevice(std::shared_ptr<VulkanInstance> instance, std::shared
 	PresentFamily = selectedDevice.PresentFamily;
 	GraphicsTimeQueries = selectedDevice.GraphicsTimeQueries;
 
-	DebugLayerActive = instance->DebugLayerActive;
-
 	try
 	{
 		CreateDevice();

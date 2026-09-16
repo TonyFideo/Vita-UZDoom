@@ -31,7 +31,13 @@
 #include "c_cvars.h"
 #include "printf.h"
 
+#if defined(VITA)
+// Vita packages GENMIDI and the software OPL backend.  This avoids selecting
+// the unavailable FluidSynth backend and keeps MIDI playback lightweight.
+#define DEF_MIDIDEV -3
+#else
 #define DEF_MIDIDEV -5
+#endif
 
 EXTERN_CVAR(Int, snd_mididevice)
 

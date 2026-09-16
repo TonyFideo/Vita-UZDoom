@@ -31,7 +31,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef VITA
 #include <sys/ioctl.h>
+#endif
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -56,6 +58,10 @@
 #include "widgets/errorwindow.h"
 #include "widgets/launcherwindow.h"
 
+#if defined(VITA)
+#include "vita_platform.h"
+#endif
+
 #if defined(__APPLE__)
 int I_PickIWad_Cocoa (WadStuff *wads, int numwads, bool showwin, int defaultiwad);
 #endif
@@ -76,6 +82,12 @@ void I_SetIWADInfo()
 
 extern "C" int I_FileAvailable(const char* filename)
 {
+#if defined(VITA)
+	// The Vita build has no shell/which utility. The only caller is the
+	// optional crash reporter, which is not part of the Vita source set; keep
+	// this fallback useful for any future platform-side caller without popen.
+	return access(filename, F_OK) == 0;
+#else
 	FString cmd = "which {0} >/dev/null 2>&1";
 	cmd.Substitute("{0}", filename);
 
@@ -86,6 +98,7 @@ extern "C" int I_FileAvailable(const char* filename)
 	}
 
 	return 0;
+#endif
 }
 
 //
@@ -136,11 +149,31 @@ void Unix_I_FatalError(const char* errortext)
 }
 #endif
 
+#if defined(VITA)
+static void Vita_I_FatalError(const char* errortext)
+{
+	// Vita has no desktop error dialog and does not define __unix__. Keep the
+	// fatal message and the startup console history in a writable location so
+	// a failed hardware run is diagnosable from Vita3K or from the Vita shell.
+	if (FILE* logfile = fopen(UZDOOM_VITA_DATA_ROOT "/vita_fatal.log", "w"))
+	{
+		fprintf(logfile, "**** UZDoom Vita fatal error ****\n%s\n\n", errortext ? errortext : "(no message)");
+		for (const FString& line : g_AllPrintOutput)
+			fputs(line.GetChars(), logfile);
+		fclose(logfile);
+	}
+	fprintf(stderr, "\n%s\n", errortext ? errortext : "(no message)");
+	SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
+#endif
+
 
 void I_ShowFatalError(const char *message)
 {
 #ifdef __APPLE__
 	Mac_I_FatalError(message);
+#elif defined(VITA)
+	Vita_I_FatalError(message);
 #elif defined __unix__
 	Unix_I_FatalError(message);
 #else
@@ -200,11 +233,15 @@ void CalculateCPUSpeed()
 
 void CleanProgressBar()
 {
+#ifdef VITA
+	return;
+#else
 	if (!isatty(STDOUT_FILENO)) return;
 	struct winsize sizeOfWindow;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &sizeOfWindow);
 	fprintf(stdout,"\0337\033[%d;%dH\033[0J\0338",sizeOfWindow.ws_row, 0);
 	fflush(stdout);
+#endif
 }
 
 static int ProgressBarCurPos, ProgressBarMaxPos;
@@ -212,6 +249,11 @@ static bool ProgressBarComplete;
 
 void RedrawProgressBar(int CurPos, int MaxPos)
 {
+#ifdef VITA
+	(void)CurPos;
+	(void)MaxPos;
+	return;
+#else
 	if (!isatty(STDOUT_FILENO)) return;
 
 	if (ProgressBarComplete && CurPos >= MaxPos) return;
@@ -238,6 +280,7 @@ void RedrawProgressBar(int CurPos, int MaxPos)
 	fflush(stdout);
 	ProgressBarCurPos = CurPos;
 	ProgressBarMaxPos = MaxPos;
+#endif
 }
 
 void I_PrintStr(const char *cp)

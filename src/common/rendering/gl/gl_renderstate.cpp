@@ -29,7 +29,6 @@
 #include "gl_buffers.h"
 #include "hw_clock.h"
 #include "hwrenderer/data/hw_viewpointbuffer.h"
-#include "texturemanager.h"
 
 namespace OpenGLRenderer
 {
@@ -253,7 +252,7 @@ void FGLRenderState::ApplyState()
 
 	if (mMaterial.mChanged)
 	{
-		ApplyMaterial();
+		ApplyMaterial(mMaterial.mMaterial, mMaterial.mClampMode, mMaterial.mTranslation, mMaterial.mOverrideShader);
 		mMaterial.mChanged = false;
 	}
 
@@ -302,9 +301,9 @@ void FGLRenderState::Apply()
 //
 //===========================================================================
 
-void FGLRenderState::ApplyMaterial()
+void FGLRenderState::ApplyMaterial(FMaterial *mat, int clampmode, int translation, int overrideshader)
 {
-	if (mMaterial.mMaterial->Source()->isHardwareCanvas() && !mMaterial.mMaterial->Source()->GetTranslucency())
+	if (mat->Source()->isHardwareCanvas() && !mat->Source()->GetTranslucency())
 	{
 		mTempTM = TM_OPAQUE;
 	}
@@ -312,33 +311,33 @@ void FGLRenderState::ApplyMaterial()
 	{
 		mTempTM = TM_NORMAL;
 	}
-	auto tex = mMaterial.mMaterial->Source();
-	mEffectState = mMaterial.mOverrideShader >= 0 ? mMaterial.mOverrideShader : mMaterial.mMaterial->GetShaderIndex();
+	auto tex = mat->Source();
+	mEffectState = overrideshader >= 0 ? overrideshader : mat->GetShaderIndex();
 	mShaderTimer = tex->GetShaderSpeed();
 	SetSpecular(tex->GetGlossiness(), tex->GetSpecularLevel());
 	if (tex->isHardwareCanvas()) static_cast<FCanvasTexture*>(tex->GetTexture())->NeedUpdate();
 
-	int clampmode = tex->GetClampMode(mMaterial.mClampMode);
+	clampmode = tex->GetClampMode(clampmode);
 
 	// avoid rebinding the same texture multiple times.
-	if (mMaterial.mMaterial == lastMaterial && lastClamp == clampmode && mMaterial.mTranslation == lastTranslation) return;
-	lastMaterial = mMaterial.mMaterial;
+	if (mat == lastMaterial && lastClamp == clampmode && translation == lastTranslation) return;
+	lastMaterial = mat;
 	lastClamp = clampmode;
-	lastTranslation = mMaterial.mTranslation;
+	lastTranslation = translation;
 
 	int maxbound = 0;
 
-	int numLayers = mMaterial.mMaterial->NumLayers();
+	int numLayers = mat->NumLayers();
 	MaterialLayerInfo* layer;
-	auto base = static_cast<FHardwareTexture*>(mMaterial.mMaterial->GetLayer(0, mMaterial.mTranslation, &layer));
+	auto base = static_cast<FHardwareTexture*>(mat->GetLayer(0, translation, &layer));
 
-	if (base->BindOrCreate(tex->GetTexture(), 0, clampmode, mMaterial.mTranslation, layer->scaleFlags))
+	if (base->BindOrCreate(tex->GetTexture(), 0, clampmode, translation, layer->scaleFlags))
 	{
 		if (!(layer->scaleFlags & CTF_Indexed))
 		{
 			for (int i = 1; i < numLayers; i++)
 			{
-				auto systex = static_cast<FHardwareTexture*>(mMaterial.mMaterial->GetLayer(i, 0, &layer));
+				auto systex = static_cast<FHardwareTexture*>(mat->GetLayer(i, 0, &layer));
 				// fixme: Upscale flags must be disabled for certain layers.
 				systex->BindOrCreate(layer->layerTexture, i, clampmode, 0, layer->scaleFlags);
 				maxbound = i;
@@ -348,7 +347,7 @@ void FGLRenderState::ApplyMaterial()
 		{
 			for (int i = 1; i < 3; i++)
 			{
-				auto systex = static_cast<FHardwareTexture*>(mMaterial.mMaterial->GetLayer(i, mMaterial.mTranslation, &layer));
+				auto systex = static_cast<FHardwareTexture*>(mat->GetLayer(i, translation, &layer));
 				systex->Bind(i, false);
 				maxbound = i;
 			}

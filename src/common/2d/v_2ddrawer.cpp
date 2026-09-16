@@ -690,6 +690,14 @@ void F2DDrawer::AddShape(FGameTexture* img, DShape2D* shape, DrawParms& parms)
 		}
 
 		buf->UploadData(&verts[0], dg.mVertCount, &shape->mIndices[0], shape->mIndices.Size());
+		// Keep a CPU mirror for the software-first Vita presenter. The regular
+		// GL/Vulkan paths still consume the uploaded F2DVertexBuffer above.
+		shape->bufferInfo->cpuVertices = std::move(verts);
+		shape->bufferInfo->cpuIndices.Clear();
+		shape->bufferInfo->cpuIndices.Reserve(shape->mIndices.Size());
+		for (int i = 0; i < shape->mIndices.Size(); ++i)
+			shape->bufferInfo->cpuIndices[i] = shape->mIndices[i];
+
 		shape->bufferInfo->needsVertexUpload = false;
 		shape->bufferInfo->uploadedOnce = true;
 	}

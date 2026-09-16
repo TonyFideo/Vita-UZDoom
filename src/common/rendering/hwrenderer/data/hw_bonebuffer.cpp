@@ -19,11 +19,21 @@
 #include "hw_dynlightdata.h"
 #include "shaderuniforms.h"
 
+#if defined(VITA)
+#include "common/platform/vita/vita_platform.h"
+#endif
+
 static const int BONE_SIZE = (16*sizeof(float));
 
 BoneBuffer::BoneBuffer(int pipelineNbr) : mPipelineNbr(pipelineNbr)
 {
+#if defined(VITA)
+	// Keep the model upload reserve bounded on the 128 MiB Vita user heap.
+	// 8192 matrices is still far above any single Doom actor/model skeleton.
+	int maxNumberOfBones = UZDOOM_VITA_HW_BONE_BUFFER_ENTRIES;
+#else
 	int maxNumberOfBones = 80000;
+#endif
 
 	mBufferSize = maxNumberOfBones;
 	mByteSize = mBufferSize * BONE_SIZE;

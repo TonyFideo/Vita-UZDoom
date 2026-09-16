@@ -22,7 +22,6 @@
 #include "hw_lighting.h"
 #include "hw_cvars.h"
 
-EXTERN_CVAR(Int, r_distance_cull_type)
 
 //==========================================================================
 //
@@ -94,20 +93,7 @@ void SetFog(FRenderState &state, FLevelLocals* Level, ELightMode lightmode, int 
 	PalEntry fogcolor;
 	float fogdensity;
 
-	if (r_distance_cull_type > 1) // even if fullbright is true
-	{
-		fogdensity = clamp<int> ((int)(19200.0 / Level->culldist), 1, 255); // Let minimum be 1 to set the correct flags
-		if (cmap != nullptr && cmap->FadeColor != 0)
-		{
-			fogcolor = cmap->FadeColor;
-			fogcolor.a = 0;
-		}
-		else
-		{
-			fogcolor = Level->cullcolor;
-		}
-	}
-	else if (Level->flags&LEVEL_HASFADETABLE)
+	if (Level->flags&LEVEL_HASFADETABLE)
 	{
 		fogdensity = 70;
 		fogcolor = 0x808080;
@@ -129,7 +115,7 @@ void SetFog(FRenderState &state, FLevelLocals* Level, ELightMode lightmode, int 
 
 
 	// no fog in enhanced vision modes!
-	if ((fogdensity == 0 || gl_fogmode == 0) && r_distance_cull_type < 2)
+	if (fogdensity == 0 || gl_fogmode == 0)
 	{
 		state.EnableFog(false);
 		state.SetFog(0, 0);

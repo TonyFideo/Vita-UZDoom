@@ -31,10 +31,9 @@ enum class ELightBlendMode : uint8_t
 
 struct HWViewpointUniforms
 {
-	VSMatrix ProjectionMatrix;
-	VSMatrix ViewMatrix;
-	VSMatrix NormalViewMatrix;
-
+	VSMatrix mProjectionMatrix;
+	VSMatrix mViewMatrix;
+	VSMatrix mNormalViewMatrix;
 	FVector4 mCameraPos;
 	FVector4 mClipLine;
 
@@ -52,6 +51,6 @@ struct HWViewpointUniforms
 
 	void CalcDependencies()
 	{
-		NormalViewMatrix.computeNormalMatrix(ViewMatrix);
+		mNormalViewMatrix.computeNormalMatrix(mViewMatrix);
 	}
 };

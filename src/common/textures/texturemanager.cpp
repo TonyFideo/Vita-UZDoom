@@ -244,8 +244,7 @@ FTextureID FTextureManager::CheckForTexture (const char *name, ETextureType uset
 				if (tex == NO_TEXTURE) return FTextureID(-1);
 				if (tex != NULL) return tex->GetID();
 				if (flags & TEXMAN_DontCreate) return FTextureID(-1);	// we only want to check, there's no need to create a texture if we don't have one yet.
-				tex = MakeGameTexture(CreateTextureFromLump(lump), name, ETextureType::Override);
-				if(strchr(name, '/')) tex->setFullNameTexture();
+				tex = MakeGameTexture(CreateTextureFromLump(lump), nullptr, ETextureType::Override);
 				if (tex != NULL)
 				{
 					tex->AddAutoMaterials();

@@ -12,6 +12,7 @@ include( CheckCXXCompilerFlag )
 include( CheckIncludeFile )
 include( CheckIncludeFiles )
 include( CheckLibraryExists )
+include( FindPkgConfig )
 
 if( DEM_CMAKE_COMPILER_IS_GNUCXX_COMPATIBLE )
 	option( NO_STRIP "Do not strip Release or MinSizeRel builds" )
@@ -102,7 +103,14 @@ else()
 	# Non-Windows version also needs SDL except native OS X backend
 	if( NOT APPLE OR NOT OSX_COCOA_BACKEND )
 		find_package( SDL2 REQUIRED )
-		include_directories( SYSTEM "${SDL2_INCLUDE_DIR}" )
+		# VitaSDK's C++ driver already supplies its target sysroot include
+		# directory. Adding that same directory as an explicit SYSTEM include
+		# moves it in front of libstdc++'s include_next chain and makes
+		# <cstdlib> unable to reach the SDK's stdlib.h. All SDL includes in
+		# this tree use <SDL2/...>, which the implicit SDK include root resolves.
+		if( NOT VITA )
+			include_directories( SYSTEM "${SDL2_INCLUDE_DIR}" )
+		endif()
 		link_directories(${SDL2_LINK_DIR})
 		set( PROJECT_LIBRARIES ${PROJECT_LIBRARIES} "${SDL2_LIBRARY}" )
 	endif()
@@ -300,12 +308,8 @@ if (HAVE_VULKAN)
 	list( APPEND PROJECT_LIBRARIES "zvulkan" )
 endif()
 
-add_subdirectory("common/thirdparty/freetype-2.13.3")
-add_subdirectory("common/thirdparty/harfbuzz-7.3.0")
-add_subdirectory("utility/trex")
-list( APPEND PROJECT_LIBRARIES "trex" )
 list( APPEND PROJECT_LIBRARIES "zwidget" )
-list( APPEND PROJECT_LIBRARIES "${WEBP_TARGET}" )
+list( APPEND PROJECT_LIBRARIES "webp" )
 
 message("Building for target architecture: ${TARGET_ARCHITECTURE}")
 
@@ -341,15 +345,19 @@ if( MSVC AND NOT VPX_FOUND )
 	set( VPX_FOUND TRUE )
 endif()
 
-if( VPX_FOUND )
-	add_definitions( "-DUSE_LIBVPX=1" )
-	include_directories( SYSTEM "${VPX_INCLUDE_DIR}" )
-	set( PROJECT_LIBRARIES ${PROJECT_LIBRARIES} ${VPX_LIBRARIES} )
+if( USE_LIBVPX )
+	if( VPX_FOUND )
+		add_definitions( "-DUSE_LIBVPX=1" )
+		include_directories( SYSTEM "${VPX_INCLUDE_DIR}" )
+		set( PROJECT_LIBRARIES ${PROJECT_LIBRARIES} ${VPX_LIBRARIES} )
+	else()
+		message( SEND_ERROR "Could not find libvpx" )
+	endif()
 else()
-	message( SEND_ERROR "Could not find libvpx" )
+	add_definitions( "-DUZDOOM_NO_LIBVPX=1" )
 endif()
 
-include_directories( SYSTEM "${BZIP2_INCLUDE_DIR}" "${LZMA_INCLUDE_DIR}" "${ZMUSIC_INCLUDE_DIR}" "${BOOST_PFR_INCLUDE_DIR}" "${REFLECT_INCLUDE_DIR}")
+include_directories( SYSTEM "${BZIP2_INCLUDE_DIR}" "${LZMA_INCLUDE_DIR}" "${ZMUSIC_INCLUDE_DIR}")
 
 if( ${HAVE_VM_JIT} )
 	add_definitions( -DHAVE_VM_JIT )
@@ -449,6 +457,17 @@ elseif( APPLE )
 
 	set_source_files_properties( posix/osx/zdoom.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources )
 	set_source_files_properties( common/platform/posix/osx/iwadpicker_cocoa.mm PROPERTIES COMPILE_FLAGS -fobjc-exceptions )
+elseif( VITA )
+	set( SYSTEM_SOURCES_DIR common/platform/posix common/platform/posix/sdl common/platform/vita )
+	set( VITA_SDL_SOURCES ${PLAT_SDL_SOURCES} )
+	# Vita does not expose the Linux sigaction/siginfo extensions used by the
+	# optional SDL crash reporter.  Keep the normal engine error path instead.
+	list( REMOVE_ITEM VITA_SDL_SOURCES common/platform/posix/sdl/crashcatcher.c )
+	set( SYSTEM_SOURCES ${PLAT_POSIX_SOURCES} ${VITA_SDL_SOURCES}
+		common/platform/vita/i_specialpaths.cpp
+		common/platform/vita/vita_compat.cpp
+		common/platform/vita/vita_zmusic_compat.cpp )
+	set( OTHER_SYSTEM_SOURCES ${PLAT_WIN32_SOURCES} ${PLAT_OSX_SOURCES} ${PLAT_COCOA_SOURCES} ${PLAT_UNIX_SOURCES} )
 else()
 	option (SYSTEMINSTALL "Set global progdir based on CMake Install Dir" OFF)
 
@@ -568,7 +587,6 @@ file( GLOB HEADER_FILES
 	common/thirdparty/utf8proc/*.h
 	common/rendering/*.h
 	common/rendering/gl_load/*.h
-	common/rendering/gl/*.h
 	common/rendering/gles/*.h
 	common/rendering/hwrenderer/data/*.h
 	common/rendering/vulkan/*.h
@@ -1122,7 +1140,6 @@ set (PCH_SOURCES
 	common/menu/messagebox.cpp
 	common/menu/optionmenu.cpp
 	common/menu/resolutionmenu.cpp
-	common/menu/advancedfontmenu.cpp
 	common/menu/menudef.cpp
 	common/menu/savegamemanager.cpp
 	common/statusbar/base_sbar.cpp
@@ -1214,7 +1231,6 @@ set (PCH_SOURCES
 	utility/nodebuilder/nodebuild_gl.cpp
 	utility/nodebuilder/nodebuild_utility.cpp
 	utility/system_theme.cpp
-	utility/simdutf/simdutf.cpp
 )
 
 if( ZMUSIC_SYSTEM_INSTALL OR NOT DEFINED BUILD_SHARED_LIBS OR BUILD_SHARED_LIBS)
@@ -1279,6 +1295,7 @@ set( GAME_SOURCES
 	common/filesystem/source/fs_stringpool.cpp
 	common/filesystem/source/unicode.cpp
 	common/filesystem/source/critsec.cpp
+
 )
 
 set( GAME_NONPCH_SOURCES ${GAME_SOURCES} )
@@ -1287,6 +1304,16 @@ list( REMOVE_ITEM GAME_NONPCH_SOURCES ${PCH_SOURCES} )
 add_executable( zdoom MACOSX_BUNDLE ${GAME_SOURCES} )
 
 target_include_directories( zdoom PRIVATE ${CMAKE_BINARY_DIR} )
+
+if( VITA AND VITAGL_ROOT )
+	if( NOT EXISTS "${VITAGL_ROOT}/source/vitaGL.h" )
+		message( FATAL_ERROR "VITAGL_ROOT does not contain source/vitaGL.h: ${VITAGL_ROOT}" )
+	endif()
+	target_include_directories( zdoom PRIVATE "${VITAGL_ROOT}/source" )
+	if( NOT EXISTS "${VITAGL_ROOT}/libvitaGL.a" )
+		message( WARNING "VitaGL headers found, but libvitaGL.a is missing under ${VITAGL_ROOT}; the Vita link will remain incomplete." )
+	endif()
+endif()
 
 option(USE_PCH "Enable Pre-compiled headers" ON)
 if (USE_PCH)
@@ -1334,6 +1361,17 @@ if( UNIX )
 endif()
 
 target_link_libraries( zdoom ${PROJECT_LIBRARIES} lzma ${ZMUSIC_LIBRARIES} absl::base absl::flat_hash_map absl::strings absl::hash )
+
+if(VITA)
+	# SDL2-vitaGL's static archive contains the GXM backend but its legacy
+	# FindSDL2 module does not import the VitaSDK libraries from sdl2.pc.
+	# Re-scan the local VitaGL archive after SDL2 so its vgl* entry points are
+	# available to SDL as well, then resolve both archives with Vita stubs.
+	if(VITAGL_ROOT AND EXISTS "${VITAGL_ROOT}/libvitaGL.a")
+		target_link_libraries(zdoom "${VITAGL_ROOT}/libvitaGL.a")
+	endif()
+	target_link_libraries(zdoom ${VITA_SDL2_LINK_LIBRARIES})
+endif()
 include_directories(
 	BEFORE
 	.
@@ -1390,13 +1428,13 @@ include_directories(
 	xlat
 	utility
 	utility/nodebuilder
-	utility/simdutf
 	scripting
 	scripting/zscript
 	rendering
 	launcher
 	../libraries/ZVulkan/include
 	../libraries/ZWidget/include
+	../libraries/webp/include
 	../libraries/range_map/include
 	${SYSTEM_SOURCES_DIR}
 )
@@ -1454,13 +1492,20 @@ else()
 endif()
 
 add_custom_command(TARGET zdoom POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy_directory
-		"${CMAKE_SOURCE_DIR}/soundfont"
-		"${ZDOOM_RESOURCE_DIR}/soundfonts"
+	COMMAND ${CMAKE_COMMAND} -E make_directory "${ZDOOM_RESOURCE_DIR}/soundfonts"
+	COMMAND ${CMAKE_COMMAND} -E make_directory "${ZDOOM_RESOURCE_DIR}/fm_banks"
 
-	COMMAND ${CMAKE_COMMAND} -E copy_directory
-		"${CMAKE_SOURCE_DIR}/fm_banks"
-		"${ZDOOM_RESOURCE_DIR}/fm_banks"
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"${CMAKE_SOURCE_DIR}/soundfont/uzdoom.sf2"
+		"${ZDOOM_RESOURCE_DIR}/soundfonts/uzdoom.sf2"
+
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"${CMAKE_SOURCE_DIR}/fm_banks/GENMIDI.GS.wopl"
+		"${ZDOOM_RESOURCE_DIR}/fm_banks/GENMIDI.GS.wopl"
+
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"${CMAKE_SOURCE_DIR}/fm_banks/gs-by-papiezak-and-sneakernets.wopn"
+		"${ZDOOM_RESOURCE_DIR}/fm_banks/gs-by-papiezak-and-sneakernets.wopn"
 
 	VERBATIM
 )

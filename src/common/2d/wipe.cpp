@@ -186,8 +186,7 @@ public:
 	bool Interpolatable() override { return true; }
 
 private:
-	static constexpr int WIDTH = 320;
-	static constexpr int HEIGHT = 200;
+	enum { WIDTH = 320, HEIGHT = 200 };
 	double y[WIDTH];
 };
 

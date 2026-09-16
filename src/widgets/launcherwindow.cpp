@@ -211,8 +211,8 @@ void LauncherWindow::OnClose()
 
 void LauncherWindow::OnGeometryChanged()
 {
-	Info->LauncherWidth = static_cast<int>(std::ceil(GetWidth()));
-	Info->LauncherHeight = static_cast<int>(std::ceil(GetHeight()));
+	Info->LauncherWidth = GetWidth();
+	Info->LauncherHeight = GetHeight();
 
 	double top = Banner->GetPreferredHeight();
 	double bottom = GetHeight();

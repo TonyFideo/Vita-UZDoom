@@ -29,7 +29,7 @@ class DFloor : public DMovingFloor
 {
 	DECLARE_CLASS (DFloor, DMovingFloor)
 public:
-	enum EFloor
+	enum EFloor : int
 	{
 		floorLowerToLowest,
 		floorLowerToNearest,
@@ -116,7 +116,7 @@ class DElevator : public DMover
 	DECLARE_CLASS (DElevator, DMover)
 	HAS_OBJECT_POINTERS
 public:
-	enum EElevator
+	enum EElevator : int
 	{
 		elevateUp,
 		elevateDown,

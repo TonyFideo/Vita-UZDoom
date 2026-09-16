@@ -347,6 +347,22 @@ void FileSystem::AddFile (const char *filename, FileReader *filer, LumpFilterInf
 				}
 				return;
 			}
+
+#if defined(VITA)
+			// A WAD is read from worker threads while the resource system is
+			// being built.  Reopening app0: files for every lump is both much
+			// slower on Vita and can leave Vita3K with a large number of
+			// simultaneous readers.  Keep the bundled WAD in one memory-backed
+			// reader so lump readers never need to reopen the package file.
+			const char *extension = strrchr(filename, '.');
+			if (extension != nullptr && !stricmp(extension, ".wad"))
+			{
+				const auto length = filereader.GetLength();
+				auto data = filereader.Read();
+				if (length > 0 && data.size() == static_cast<size_t>(length))
+					filereader.OpenMemoryArray(data);
+			}
+#endif
 		}
 	}
 	else filereader = std::move(*filer);

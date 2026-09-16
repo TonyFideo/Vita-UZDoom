@@ -29,6 +29,7 @@
 #include "curl_loader.h"
 #endif
 
+#if !defined(VITA)
 static_assert(sizeof(void*) == 8,
 	"Only LP64/LLP64 builds are officially supported. "
 	"Please do not attempt to build for other platforms; "
@@ -36,6 +37,10 @@ static_assert(sizeof(void*) == 8,
 	"there are e.g. known visual artifacts "
 	"<https://forum.zdoom.org/viewtopic.php?f=7&t=75673> "
 	"that lead to a bad user experience.");
+#else
+// Vita is a 32-bit ARM target. Keep the port buildable while the remaining
+// 32-bit ABI assumptions are audited independently of the renderer.
+#endif
 
 // Some global engine variables taken out of the backend code.
 FStartupScreen* StartWindow;

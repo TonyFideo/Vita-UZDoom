@@ -37,10 +37,12 @@
 #	include <errno.h>
 #	include <netdb.h>
 #	include <netinet/in.h>
-#	include <sys/ioctl.h>
+#	if !defined(VITA)
+#		include <sys/ioctl.h>
+#	endif
 #	include <sys/socket.h>
 #	include <unistd.h>
-#	ifdef __sun
+#	if defined(__sun) || defined(VITA)
 #		include <fcntl.h>
 #	endif
 #endif
@@ -320,11 +322,13 @@ static void StartNetwork(bool autoPort)
 	MySocket = CreateUDPSocket();
 	BindToLocalPort(MySocket, autoPort ? 0 : GamePort);
 
+	#if !defined(__sun) && !defined(VITA)
 	u_long trueVal = 1u;
-#ifndef __sun
 	ioctlsocket(MySocket, FIONBIO, &trueVal);
 #else
-	fcntl(MySocket, F_SETFL, trueVal | O_NONBLOCK);
+	int flags = fcntl(MySocket, F_GETFL, 0);
+	if (flags >= 0)
+		fcntl(MySocket, F_SETFL, flags | O_NONBLOCK);
 #endif
 }
 
@@ -490,11 +494,10 @@ static void SendPacket(const sockaddr_in& to)
 
 	uint8_t* dataStart = &TransmitBuffer[4];
 	uLong size = MaxTransmitSize - 5u;
-	assert((NetBufferLength) <= ULONG_MAX);
 	if (NetBufferLength >= MinCompressionSize)
 	{
 		*dataStart = NetBuffer[0] | NCMD_COMPRESSED;
-		const int res = compress2(dataStart + 1, &size, NetBuffer + 1, static_cast<unsigned long>(NetBufferLength - 1u), 9);
+		const int res = compress2(dataStart + 1, &size, NetBuffer + 1, NetBufferLength - 1u, 9);
 		if (res != Z_OK)
 			I_Error("Net compression failed (zlib error %d)", res);
 
@@ -503,7 +506,7 @@ static void SendPacket(const sockaddr_in& to)
 	else
 	{
 		memcpy(dataStart, NetBuffer, NetBufferLength);
-		size = static_cast<unsigned long>(NetBufferLength);
+		size = NetBufferLength;
 	}
 
 	if (size + 4 > MaxTransmitSize)
@@ -925,7 +928,7 @@ static bool Host_CheckForConnections(void* connected)
 				memcpy(&NetBuffer[3], GameID, 8);
 				NetBufferLength = 11u;
 
-				TArrayView<uint8_t> stream = TArrayView(&NetBuffer[NetBufferLength], static_cast<uint32_t>(MAX_MSGLEN - NetBufferLength));
+				TArrayView<uint8_t> stream = TArrayView(&NetBuffer[NetBufferLength], MAX_MSGLEN - NetBufferLength);
 				Net_SetGameInfo(stream);
 				NetBufferLength += stream.Data() - &NetBuffer[NetBufferLength];
 				SendPacket(con.Address);
@@ -951,7 +954,7 @@ static bool Host_CheckForConnections(void* connected)
 							NetBufferLength += addrSize;
 						}
 
-						TArrayView<uint8_t> stream = TArrayView(&NetBuffer[NetBufferLength], static_cast<uint32_t>(MAX_MSGLEN - NetBufferLength));
+						TArrayView<uint8_t> stream = TArrayView(&NetBuffer[NetBufferLength], MAX_MSGLEN - NetBufferLength);
 						Net_SetUserInfo(i, stream);
 						NetBufferLength += stream.Data() - &NetBuffer[NetBufferLength];
 						SendPacket(con.Address);
@@ -1076,7 +1079,7 @@ static FString ReadVerificationError(TArrayView<uint8_t> stream)
 	}
 
 	TMap<FString, FString> files = {};
-	for (int i = 0; i < fileSystem.GetNumWads(); ++i)
+	for (size_t i = 0u; i < fileSystem.GetNumWads(); ++i)
 	{
 		if (!fileSystem.IsOptionalResource(i))
 		{
@@ -1256,7 +1259,7 @@ static bool Guest_ContactHost(void* unused)
 				{
 					Connected[c].Status = CSTAT_READY;
 				}
-				TArrayView<uint8_t> stream = TArrayView(&NetBuffer[byte], static_cast<unsigned>(MAX_MSGLEN - byte));
+				TArrayView<uint8_t> stream = TArrayView(&NetBuffer[byte], MAX_MSGLEN - byte);
 				Net_ReadUserInfo(c, stream);
 				SetClientAck(consoleplayer, c, true);
 
@@ -1296,7 +1299,7 @@ static bool Guest_ContactHost(void* unused)
 			NetBuffer[1] = PRE_USER_INFO;
 			NetBufferLength = 2u;
 
-			TArrayView<uint8_t> stream = TArrayView(&NetBuffer[NetBufferLength], static_cast<unsigned>(MAX_MSGLEN - NetBufferLength));
+			TArrayView<uint8_t> stream = TArrayView(&NetBuffer[NetBufferLength], MAX_MSGLEN - NetBufferLength);
 			Net_SetUserInfo(consoleplayer, stream);
 			NetBufferLength += stream.Data() - &NetBuffer[NetBufferLength];
 			SendPacket(Connected[0].Address);

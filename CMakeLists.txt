@@ -4,11 +4,23 @@ cmake_policy( SET CMP0067 NEW )
 cmake_policy( SET CMP0091 NEW )
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+# Vita cannot link host-side CMake feature-test executables.  Set this before
+# project() so the first compiler checks use static-library try_compile tests.
+if(DEFINED VITA AND VITA)
+	set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY CACHE STRING
+		"Avoid target executable linking during Vita feature checks" FORCE)
+endif()
+
 project(UZDoom)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+option(VITA "Build UZDoom for PlayStation Vita" OFF)
+if(VITA)
+	include("${CMAKE_SOURCE_DIR}/cmake/Vita.cmake")
+endif()
 
 set(ABSL_BUILD_TESTING OFF) # don't build/run abseil tests
 
@@ -62,6 +74,9 @@ endif()
 
 if(CMAKE_CROSSCOMPILING)
 	set(IMPORT_EXECUTABLES "IMPORTFILE-NOTFOUND" CACHE FILEPATH "Export file from native build.")
+	if(NOT EXISTS "${IMPORT_EXECUTABLES}")
+		message(FATAL_ERROR "Cross-compiling requires IMPORT_EXECUTABLES from a native host-tools build; pass -DIMPORT_EXECUTABLES=<path>/ImportExecutables.cmake")
+	endif()
 	include(${IMPORT_EXECUTABLES})
 endif()
 
@@ -183,9 +198,15 @@ macro( make_release_only )
 endmacro()
 
 IF( NOT CMAKE_BUILD_TYPE )
-	SET( CMAKE_BUILD_TYPE Debug CACHE STRING
+	IF( VITA )
+		SET( CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING
+			"Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel."
+			FORCE )
+	ELSE()
+		SET( CMAKE_BUILD_TYPE Debug CACHE STRING
 		"Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel."
 		FORCE )
+	ENDIF()
 ENDIF()
 
 set( ZDOOM_OUTPUT_DIR ${CMAKE_BINARY_DIR} CACHE PATH "Directory where zdoom.pk3 and the executable will be created." )
@@ -248,13 +269,11 @@ macro( gz_require_strnicmp )
 endmacro()
 
 option( NO_OPENAL "Disable OpenAL sound support" OFF )
+option( USE_LIBVPX "Enable VP8/VP9 IVF video support" ON )
 
 find_package( BZip2 )
-find_package( VPX )
-
-include( FindPkgConfig )
-if( PkgConfig_FOUND )
-	pkg_check_modules( WEBP IMPORTED_TARGET libwebpdecoder libwebpmux )
+if( USE_LIBVPX )
+	find_package( VPX )
 endif()
 
 if (CURL_REQUIRED)
@@ -327,16 +346,10 @@ if( MSVC )
 	endif()
 
 	string(REPLACE "/Ob1 " "/Ob2 " CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}" )
-
-	if( CMAKE_CXX_COMPILER_LAUNCHER OR CMAKE_C_COMPILER_LAUNCHER )
-		# For some reason, these cause rebuild issues on some installs of msvc.
-		# These lines are required for ccache to work.
-		# There might be a better way to do this, but I cannot find one.
-		string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
-		string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
-		string(REPLACE "/Zi" "/Z7" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
-		string(REPLACE "/Zi" "/Z7" CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
-	endif()
+	string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+	string(REPLACE "/Zi" "/Z7" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+	string(REPLACE "/Zi" "/Z7" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+	string(REPLACE "/Zi" "/Z7" CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
 else()
 	set( REL_LINKER_FLAGS "" )
 	set( ALL_C_FLAGS "-ffp-contract=off" )
@@ -353,6 +366,7 @@ else()
 		include(CheckSymbolExists)
 		check_symbol_exists( "fts_set" "sys/types.h;sys/stat.h;fts.h" HAVE_FTS )
 		if ( NOT HAVE_FTS )
+			include ( FindPkgConfig )
 			pkg_check_modules( MUSL_FTS musl-fts )
 			if ( MUSL_FTS_FOUND )
 				list(JOIN MUSL_FTS_LDFLAGS " " MUSL_FTS_LDFLAGS_JOINED)
@@ -374,11 +388,19 @@ else()
 			# If we're compiling with a custom GCC on the Mac (which we know since g++-4.2 doesn't support C++11) statically link libgcc.
 			set( ALL_C_FLAGS "-static-libgcc" )
 		endif()
-	elseif( NOT MINGW AND NOT HAIKU AND NOT "${CMAKE_SYSTEM_NAME}" STREQUAL "SunOS" )
+	elseif( NOT VITA AND NOT MINGW AND NOT HAIKU AND NOT "${CMAKE_SYSTEM_NAME}" STREQUAL "SunOS" )
 		# Generic GCC/Clang requires position independent executable to be enabled explicitly
 		set( ALL_C_FLAGS "${ALL_C_FLAGS} -fPIE" )
 		set( CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pie" )
 	endif( APPLE )
+endif()
+
+if(VITA)
+	# The generic Unix branch above is intentionally excluded for Vita.  Keep
+	# this cleanup beside it as a guard against cached/accumulated flag strings
+	# when an existing build directory is reconfigured for the Vita target.
+	string(REPLACE "-fPIE" "" ALL_C_FLAGS "${ALL_C_FLAGS}")
+	string(REPLACE "-pie" "" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
 endif()
 
 set( CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} ${REL_LINKER_FLAGS}" )
@@ -399,7 +421,6 @@ set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${DEB_C_FLAGS} -D_DEBUG" )
 
 option(FORCE_INTERNAL_BZIP2 "Use internal bzip2")
 option(FORCE_INTERNAL_CPPDAP "Use internal cppdap" ON)
-option(FORCE_INTERNAL_WEBP "Use internal webp" ON)
 
 if (HAVE_VULKAN)
 	add_subdirectory( libraries/ZVulkan )
@@ -412,6 +433,8 @@ add_subdirectory( libraries/abseil )
 
 set(ZWIDGET_BUILD_EXAMPLE OFF CACHE INTERNAL "" FORCE)
 add_subdirectory( libraries/ZWidget )
+
+add_subdirectory( libraries/webp )
 
 if( HAVE_VM_JIT AND UNIX )
 	check_symbol_exists( "backtrace" "execinfo.h" HAVE_BACKTRACE )
@@ -448,20 +471,11 @@ if ( CPPDAP_FOUND AND NOT FORCE_INTERNAL_CPPDAP )
 	message( STATUS "Using system cppdap library, includes found at ${CPPDAP_INCLUDE_DIR}" )
 else()
 	message( STATUS "Using internal cppdap library" )
-	add_subdirectory( libraries/cppdap EXCLUDE_FROM_ALL )
+	add_subdirectory( libraries/cppdap )
 	set( CPPDAP_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libraries/cppdap" )
 	set( CPPDAP_LIBRARIES cppdap )
 	set( CPPDAP_LIBRARY cppdap )
 	set( CPPDAP_FOUND TRUE )
-endif()
-
-if ( WEBP_FOUND AND NOT FORCE_INTERNAL_WEBP )
-	message( STATUS "Using system webp library, includes found at ${WEBP_libwebpdecoder_INCLUDEDIR}" )
-	set( WEBP_TARGET PkgConfig::WEBP )
-else()
-	message( STATUS "Using internal webp library" )
-	add_subdirectory( libraries/webp )
-	set( WEBP_TARGET webp )
 endif()
 
 # ZMUSIC
@@ -472,10 +486,6 @@ set( ZMUSIC_INCLUDE_DIR ${ZMUSIC_ROOT_PATH}/include )
 set( ZMUSIC_LIBRARIES zmusic )
 
 set( LZMA_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libraries/lzma/C" )
-
-set( BOOST_PFR_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libraries/boost_pfr/include" )
-
-set( REFLECT_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libraries/reflect" )
 
 if( NOT CMAKE_CROSSCOMPILING )
 	if( NOT CROSS_EXPORTS )
@@ -504,6 +514,91 @@ add_subdirectory( wadsrc_bm )
 add_subdirectory( wadsrc_lights )
 add_subdirectory( wadsrc_extra )
 add_subdirectory( wadsrc_widepix )
+
+if(VITA)
+	# The launcher is the VPK entry point.  It keeps Vita2D initialization and
+	# the game process replacement outside UZDoom's SDL/VitaGL startup path.
+	add_subdirectory(vita/launcher)
+
+	# The full game_support.pk3 contains thousands of optional resources and
+	# exceeds the Vita heap when loaded.  Package only the IWAD table needed to
+	# identify the bundled Doom 2 test IWAD.
+	add_pk3(vita_iwadinfo.pk3 ${CMAKE_CURRENT_SOURCE_DIR}/wadsrc_vita)
+
+	# Package the complete runtime generated by the Vita build.  The optional
+	# IWAD is intentionally supplied by the local test configuration rather
+	# than embedded in the engine source tree.
+	set(_VITA_PACKAGE_FILES
+		FILE "${ZDOOM_OUTPUT_DIR}/uzdoom.pk3" "uzdoom.pk3"
+		FILE "${ZDOOM_OUTPUT_DIR}/brightmaps.pk3" "brightmaps.pk3"
+		FILE "${ZDOOM_OUTPUT_DIR}/lights.pk3" "lights.pk3"
+		FILE "${ZDOOM_OUTPUT_DIR}/vita_iwadinfo.pk3" "vita_iwadinfo.pk3"
+		FILE "${ZDOOM_OUTPUT_DIR}/game_widescreen_gfx.pk3" "game_widescreen_gfx.pk3"
+		FILE "${ZDOOM_OUTPUT_DIR}/soundfonts/uzdoom.sf2" "soundfonts/uzdoom.sf2"
+		FILE "${ZDOOM_OUTPUT_DIR}/fm_banks/GENMIDI.GS.wopl" "fm_banks/GENMIDI.GS.wopl"
+		FILE "${ZDOOM_OUTPUT_DIR}/fm_banks/gs-by-papiezak-and-sneakernets.wopn" "fm_banks/gs-by-papiezak-and-sneakernets.wopn"
+	)
+	if(VITA_TEST_IWAD)
+		if(NOT EXISTS "${VITA_TEST_IWAD}")
+			message(FATAL_ERROR "VITA_TEST_IWAD does not exist: ${VITA_TEST_IWAD}")
+		endif()
+		# vita_create_vpk in the SDK expands its -a arguments through a shell
+		# response string.  A host path containing spaces can consequently be
+		# split before vita-pack-vpk sees it.  Stage the test IWAD under the
+		# build directory (which is already part of the package output path),
+		# then pass the space-free staged path to the SDK macro.
+		set(_VITA_TEST_IWAD_PACKAGE "${ZDOOM_OUTPUT_DIR}/doom2.wad")
+		add_custom_command(
+			OUTPUT "${_VITA_TEST_IWAD_PACKAGE}"
+			COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+				"${VITA_TEST_IWAD}" "${_VITA_TEST_IWAD_PACKAGE}"
+			DEPENDS "${VITA_TEST_IWAD}"
+			VERBATIM
+		)
+		list(APPEND _VITA_PACKAGE_FILES FILE "${_VITA_TEST_IWAD_PACKAGE}" "doom2.wad")
+	endif()
+
+	# The CMake target is named zdoom, but UZDoom deliberately emits the
+	# executable as ${ZDOOM_EXE_NAME}. Pass the actual output path to the SDK
+	# macro and retain the target dependency explicitly.
+	if(VITA_FSELF_MEMSIZE)
+		if(NOT VITA_FSELF_MEMSIZE MATCHES "^[0-9]+$")
+			message(FATAL_ERROR "VITA_FSELF_MEMSIZE must be an integer number of KiB")
+		endif()
+		message(WARNING "VITA_FSELF_MEMSIZE=${VITA_FSELF_MEMSIZE} enables vita-make-fself -m; VitaSDK documents this for system-app budgets, not normal safe homebrew memory expansion.")
+		vita_create_self(uzdoom.self "${ZDOOM_OUTPUT_DIR}/${ZDOOM_EXE_NAME}" MEMSIZE "${VITA_FSELF_MEMSIZE}")
+	else()
+		vita_create_self(uzdoom.self "${ZDOOM_OUTPUT_DIR}/${ZDOOM_EXE_NAME}")
+	endif()
+	add_dependencies(uzdoom.self-self zdoom)
+
+	# Package the engine as a secondary executable.  The launcher is the VPK
+	# eboot.bin and invokes this file through sceAppMgrLoadExec().
+	vita_create_vpk(
+		uzdoom.vpk ${VITA_TITLEID} "${CMAKE_BINARY_DIR}/vita/launcher/vlauncher.self"
+		VERSION 01.00
+		NAME "${VITA_NAME}"
+		FILE "${ZDOOM_OUTPUT_DIR}/uzdoom.self" "uzdoom.bin"
+		${_VITA_PACKAGE_FILES}
+	)
+	add_dependencies(uzdoom.vpk-vpk uzdoom.self-self vlauncher.self-self)
+
+	# The PK3s and sound resources are produced by zdoom's existing dependency
+	# graph/post-build step. Add their copy targets explicitly so the VPK rule
+	# cannot race those generated files under Ninja.
+	foreach(_vita_resource_target
+		uzdoom_pk3_copy
+		brightmaps_pk3_copy
+		lights_pk3_copy
+		vita_iwadinfo_pk3_copy
+		game_widescreen_gfx_pk3_copy)
+		if(TARGET "${_vita_resource_target}")
+			add_dependencies(uzdoom.vpk-vpk "${_vita_resource_target}")
+		endif()
+	endforeach()
+
+	unset(_VITA_PACKAGE_FILES)
+endif()
 
 if( ZMUSIC_SYSTEM_INSTALL )
 	# Internal ZMusic library provides miniz target, miniz.h file in partuclar

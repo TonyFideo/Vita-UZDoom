@@ -760,6 +760,21 @@ BoolInt CPU_IsSupported_AES (void) { return APPLE_CRYPTO_SUPPORT_VAL; }
 
 #else // __APPLE__
 
+#if defined(VITA)
+
+/*
+   Vita does not expose Linux's auxv/HWCAP interface.  Keep the optional
+   ARM extensions disabled until a Vita-specific, ABI-safe feature probe is
+   added.  LZMA still uses its portable ARM implementation in this mode.
+*/
+BoolInt CPU_IsSupported_CRC32(void) { return 0; }
+BoolInt CPU_IsSupported_NEON(void)  { return 0; }
+BoolInt CPU_IsSupported_SHA1(void)  { return 0; }
+BoolInt CPU_IsSupported_SHA2(void)  { return 0; }
+BoolInt CPU_IsSupported_AES(void)   { return 0; }
+
+#else
+
 #include <sys/auxv.h>
 
 #define USE_HWCAP
@@ -795,6 +810,7 @@ MY_HWCAP_CHECK_FUNC (SHA1)
 MY_HWCAP_CHECK_FUNC (SHA2)
 MY_HWCAP_CHECK_FUNC (AES)
 
+#endif // VITA
 #endif // __APPLE__
 #endif // _WIN32
 

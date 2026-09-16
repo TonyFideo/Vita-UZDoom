@@ -266,8 +266,11 @@ struct InputEvent native play version("2.4")
 		Key_Pad_Guide = 0x1C8,
 		Key_Pad_Misc1 = 0x1C9,
 		Key_Pad_Touchpad = 0x1CA,
+		Key_Pad_BackTouch_Left = 0x1CB,
+		Key_Pad_BackTouch_Right = 0x1CC,
+		Key_Pad_BackTouch_Hold = 0x1CD,
 
-		Num_Keys = 0x1CB
+		Num_Keys = 0x1CE
 	}
 
 	//

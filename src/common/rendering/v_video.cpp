@@ -40,6 +40,10 @@
 #include "vm.h"
 #include "x86.h"
 
+#if defined(VITA)
+#include "common/platform/vita/vita_platform.h"
+#endif
+
 EXTERN_CVAR(Int, menu_resolution_custom_width)
 EXTERN_CVAR(Int, menu_resolution_custom_height)
 
@@ -178,8 +182,13 @@ int DisplayWidth, DisplayHeight;
 // There's also only one, not four.
 DFrameBuffer *screen;
 
+#if defined(VITA)
+CVAR (Int, vid_defwidth, UZDOOM_VITA_SOFTWARE_WIDTH, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
+CVAR (Int, vid_defheight, UZDOOM_VITA_SOFTWARE_HEIGHT, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
+#else
 CVAR (Int, vid_defwidth, 640, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
 CVAR (Int, vid_defheight, 480, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
+#endif
 CVAR (Bool, ticker, false, 0)
 
 CUSTOM_CVAR (Bool, vid_vsync, false, CVAR_ARCHIVE|CVAR_GLOBALCONFIG)
@@ -349,6 +358,18 @@ void V_InitScreenSize ()
 	if ( (i = Args->CheckValue (FArg_height)) )
 		height = atoi (i);
 
+#if defined(VITA)
+	// Ignore a desktop resolution left in an older archived Vita config.  Both
+	// Vita scene paths use the small logical canvas; the software presenter and
+	// GLES2 renderer still output to the native 960x544 display. Explicit
+	// -width/-height values retain the normal behavior for future diagnostics.
+	if (width == 0 && height == 0)
+	{
+		width = UZDOOM_VITA_SOFTWARE_WIDTH;
+		height = UZDOOM_VITA_SOFTWARE_HEIGHT;
+	}
+	else
+#endif
 	if (width == 0)
 	{
 		if (height == 0)
@@ -456,9 +477,7 @@ bool vid_hdr_active = false;
 DEFINE_GLOBAL(SmallFont)
 DEFINE_GLOBAL(SmallFont2)
 DEFINE_GLOBAL(BigFont)
-DEFINE_GLOBAL(BigUpper)
 DEFINE_GLOBAL(ConFont)
-DEFINE_GLOBAL(SymbolsFont)
 DEFINE_GLOBAL(NewConsoleFont)
 DEFINE_GLOBAL(NewSmallFont)
 DEFINE_GLOBAL(AlternativeSmallFont)

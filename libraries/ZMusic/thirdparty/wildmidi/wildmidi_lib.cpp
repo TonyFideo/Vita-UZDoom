@@ -34,6 +34,8 @@
 #include <string.h>
 #ifndef _WIN32
 #include <strings.h>
+#define stricmp strcasecmp
+#define strnicmp strncasecmp
 #endif
 #include <stdlib.h>
 #include <memory>

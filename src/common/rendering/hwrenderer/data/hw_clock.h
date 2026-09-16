@@ -47,7 +47,5 @@ void ResetProfilingData();
 void CheckBench();
 void  checkBenchActive();
 
-extern int doBench;
-
 
 #endif

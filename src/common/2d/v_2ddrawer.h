@@ -310,6 +310,12 @@ public:
 struct DShape2DBufferInfo : RefCountedBase
 {
 	TArray<F2DVertexBuffer> buffers;
+	// Keep a CPU mirror for backends which cannot consume the transient GPU
+	// vertex buffer directly.  The normal GL/Vulkan paths continue to use
+	// buffers; the Vita software presenter uses these arrays when it sees a
+	// shape draw command.
+	TArray<F2DDrawer::TwoDVertex> cpuVertices;
+	TArray<int> cpuIndices;
 	bool needsVertexUpload = true;
 	int bufIndex = -1;
 	int lastCommand = -1;

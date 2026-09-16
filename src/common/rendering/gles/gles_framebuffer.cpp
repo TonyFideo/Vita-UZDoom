@@ -45,6 +45,10 @@
 #include "printf.h"
 #include "gles_hwtexture.h"
 
+#if defined(VITA)
+#include "common/platform/vita/vita_platform.h"
+#endif
+
 #include "flatvertices.h"
 #include "hw_cvars.h"
 
@@ -60,6 +64,15 @@ extern bool vid_hdr_active;
 namespace OpenGLESRenderer
 {
 	FGLRenderer *GLRenderer;
+
+#if defined(VITA)
+	static void VitaGLESInitCheckpoint(const char *stage)
+	{
+		const unsigned long long memoryKiB =
+			(unsigned long long)(VitaPlatform::GetMemoryUsageBytes() / 1024);
+		Printf("Vita GLES init: %s (RAM %llu KiB)\n", stage, memoryKiB);
+	}
+#endif
 
 //==========================================================================
 //
@@ -109,10 +122,24 @@ void OpenGLFrameBuffer::InitializeState()
 {
 	static bool first=true;
 
+#if defined(VITA)
+	// One pipeline is enough for the initial Vita GLES path and avoids keeping
+	// a second full vertex/data stream alive while the SGX543 is being brought
+	// up.  An explicit gl_pipeline_depth value still remains available for
+	// profiling and future tuning.
+	mPipelineNbr = gl_pipeline_depth == 0 ? UZDOOM_VITA_HW_DEFAULT_PIPELINE_DEPTH : clamp(*gl_pipeline_depth, 1, HW_MAX_PIPELINE_BUFFERS);
+#else
 	mPipelineNbr = gl_pipeline_depth == 0? min(4, HW_MAX_PIPELINE_BUFFERS) : clamp(*gl_pipeline_depth, 1, HW_MAX_PIPELINE_BUFFERS);
+#endif
 	mPipelineType = 1;
 
 	InitGLES();
+
+#if defined(VITA)
+	VitaGLESInitCheckpoint("after InitGLES");
+	Printf("Vita GLES init: pipeline depth %d, vertex capacity %u\n",
+		mPipelineNbr, FFlatVertexBuffer::BUFFER_SIZE);
+#endif
 
 	// Move some state to the framebuffer object for easier access.
 	hwcaps = gles.flags;
@@ -139,13 +166,37 @@ void OpenGLFrameBuffer::InitializeState()
 
 	SetViewportRects(nullptr);
 
+#if defined(VITA)
+	VitaGLESInitCheckpoint("before FFlatVertexBuffer");
+#endif
 	mVertexData = new FFlatVertexBuffer(GetWidth(), GetHeight(), mPipelineNbr);
+#if defined(VITA)
+	VitaGLESInitCheckpoint("after FFlatVertexBuffer");
+#endif
 	mSkyData = new FSkyVertexBuffer;
+#if defined(VITA)
+	VitaGLESInitCheckpoint("after FSkyVertexBuffer");
+#endif
 	mViewpoints = new HWViewpointBuffer(mPipelineNbr);
+#if defined(VITA)
+	VitaGLESInitCheckpoint("after HWViewpointBuffer");
+#endif
 	mLights = new FLightBuffer(mPipelineNbr);
+#if defined(VITA)
+	VitaGLESInitCheckpoint("after FLightBuffer");
+#endif
 	mBones = new BoneBuffer(mPipelineNbr);
+#if defined(VITA)
+	VitaGLESInitCheckpoint("after BoneBuffer");
+#endif
 	GLRenderer = new FGLRenderer(this);
+#if defined(VITA)
+	VitaGLESInitCheckpoint("after FGLRenderer");
+#endif
 	GLRenderer->Initialize(GetWidth(), GetHeight());
+#if defined(VITA)
+	VitaGLESInitCheckpoint("after FGLRenderer::Initialize");
+#endif
 	static_cast<GLDataBuffer*>(mLights->GetBuffer())->BindBase();
 	static_cast<GLDataBuffer*>(mBones->GetBuffer())->BindBase();
 }
@@ -480,8 +531,5 @@ FTexture *OpenGLFrameBuffer::WipeEndScreen()
 	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewport.left, viewport.top, viewport.width, viewport.height);
 	return tex;
 }
-
-bool OpenGLFrameBuffer::HasNVidiaVRAMExt() { return gles.nv_vram_ext; }
-bool OpenGLFrameBuffer::HasATIVRAMExt() { return gles.ati_vram_ext; }
 
 }

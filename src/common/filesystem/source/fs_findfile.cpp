@@ -30,6 +30,9 @@
 #ifndef _WIN32
 
 #include <limits.h>
+#ifdef VITA
+#include <sys/syslimits.h>
+#endif
 #include <stdlib.h>
 #ifdef __FreeBSD__
 #include <sys/time.h>

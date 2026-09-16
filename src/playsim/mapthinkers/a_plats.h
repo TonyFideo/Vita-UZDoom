@@ -28,7 +28,7 @@ class DPlat : public DMovingFloor
 {
 	DECLARE_CLASS (DPlat, DMovingFloor)
 public:
-	enum EPlatState
+	enum EPlatState : int
 	{
 		up,
 		down,
@@ -36,7 +36,7 @@ public:
 		in_stasis
 	};
 
-	enum EPlatType
+	enum EPlatType : int
 	{
 		platPerpetualRaise,
 		platDownWaitUpStay,

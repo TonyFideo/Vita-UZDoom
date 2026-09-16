@@ -26,21 +26,21 @@
 
 /** Lots of different version numbers **/
 
-#define VERSIONSTR "5.1.0-pre"
+#define VERSIONSTR "5.0.1"
 
 // The version as seen in the Windows resource
-#define RC_FILEVERSION 5,0,9999,0
-#define RC_PRODUCTVERSION 5,0,9999,0
+#define RC_FILEVERSION 5,0,1,0
+#define RC_PRODUCTVERSION 5,0,1,0
 #define RC_PRODUCTVERSION2 VERSIONSTR
 // These are for content versioning.
 #define VER_MAJOR 5
-#define VER_MINOR 1
-#define VER_REVISION 0
+#define VER_MINOR 0
+#define VER_REVISION 1
 
 // This should always refer to the UZDoom version a derived port is based on and not reflect the derived port's version number!
 #define ENG_MAJOR 5
-#define ENG_MINOR 1
-#define ENG_REVISION 0
+#define ENG_MINOR 0
+#define ENG_REVISION 1
 
 // Version stored in the ini's [LastRun] section.
 // Bump it if you made some configuration change that you want to
@@ -83,8 +83,12 @@
 #endif
 
 #define BASEWAD "uzdoom.pk3"
-// Set OPTIONALWAD to "" (null) to disable searching for it
+// Vita uses a minimal IWAD table instead of the full optional support archive.
+#ifdef VITA
+#define OPTIONALWAD "vita_iwadinfo.pk3"
+#else
 #define OPTIONALWAD "game_support.pk3"
+#endif
 #define GZDOOM 1
 #define VR3D_ENABLED
 

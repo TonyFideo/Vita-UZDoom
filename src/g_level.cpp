@@ -703,9 +703,6 @@ bool FLevelLocals::ShouldDoIntermission(cluster_info_t* nextcluster, cluster_inf
 	if ((sv_alwaystally == 2) || (deathmatch))
 		return true;
 
-	if (sv_alwaystally == 3)
-		return false;
-
 	if ((sv_alwaystally == 0) && (flags & LEVEL_NOINTERMISSION))
 		return false;
 
@@ -1392,7 +1389,6 @@ void G_DoLoadLevel(const FString &nextmapname, int position, bool autosave, bool
 void FLevelLocals::DoLoadLevel(const FString &nextmapname, int position, bool autosave, bool newGame)
 {
 	MapName = nextmapname;
-	MapFName = MapName;
 	unsigned int i;
 
 	if (NextSkill >= 0)
@@ -1673,7 +1669,7 @@ void FLevelLocals::StartTravel()
 
 	if (!deathmatch)
 	{
-		for (int i = 0; i < SMAXPLAYERS; ++i)
+		for (size_t i = 0u; i < MAXPLAYERS; ++i)
 		{
 			if (PlayerInGame(i) && Players[i]->health > 0)
 				AddToTravellingList(Players[i]->mo);
@@ -1699,7 +1695,7 @@ void FLevelLocals::StartTravel()
 // the actual STAT_TRAVELLING list when snapshotting.
 void FLevelLocals::MoveTravellers()
 {
-	for (int i = 0; i < SMAXPLAYERS; ++i)
+	for (size_t i = 0u; i < MAXPLAYERS; ++i)
 	{
 		if (PlayerInGame(i))
 			Players[i]->camera = nullptr;
@@ -1868,7 +1864,7 @@ int FLevelLocals::FinishTravel()
 	ClientSideThinkers.CleanUpTravellers(savegamerestore);
 
 	// Some ZScript will be called here so we have to do this last.
-	for (int i = 0; i < SMAXPLAYERS; ++i)
+	for (size_t i = 0u; i < MAXPLAYERS; ++i)
 	{
 		if (PlayerInGame(i) && Players[i]->mo != nullptr && !(Players[i]->mo->ObjectFlags & OF_EuthanizeMe) && toCallBack.Find(Players[i]->mo) < toCallBack.Size())
 		{

@@ -24,7 +24,6 @@
 
 #include "c_cvars.h"
 #include "cmdlib.h"
-#include "c_console.h"
 #include "d_main.h"
 #include "d_steam.h"
 #include "engineerrors.h"
@@ -569,6 +568,14 @@ void FIWadManager::ValidateIWADs()
 	{
 		auto &p = mFoundWads[i];
 
+		// The Vita package can provide a prevalidated bundled IWAD entry.
+		// Do not reopen and rescan that archive through the Vita filesystem;
+		// entries which still have -1 must continue through the normal checks.
+#if defined(VITA)
+		if (p.mInfoIndex >= 0)
+			continue;
+#endif
+
 		int index;
 		auto x = strrchr(p.mFullPath.GetChars(), '.');
 		if (x != nullptr && (!stricmp(x, ".iwad") || !stricmp(x, ".ipk3") || !stricmp(x, ".ipk7")))
@@ -630,20 +637,67 @@ int FIWadManager::IdentifyVersion (std::vector<FileSys::ResourceName>&wadfiles, 
 
 	CollectSearchPaths();
 
-	// Collect all IWADs in the search path
-	for (auto &dir : mSearchPaths)
+	// The Vita package contains one known IWAD.  Avoid scanning every search
+	// directory and reopening the same archive for every candidate; that is
+	// especially expensive through the Vita filesystem layer.  Keep the
+	// normal discovery path as a fallback for development installs.
+#if defined(VITA)
+	int vita_doom2_info = -1;
+	for (unsigned i = 0; i < mIWadInfos.Size(); ++i)
 	{
-		DEBUG_LOG("Using IWAD search path %s", dir.GetChars());
-		AddIWADCandidates(dir.GetChars());
+		if (mIWadInfos[i].IWadname.CompareNoCase("doom2.wad") == 0)
+		{
+			vita_doom2_info = (int)i;
+			break;
+		}
 	}
-	for (auto& dir : mRecursiveSearchPaths)
+
+	if (iwadparm == nullptr)
 	{
-		AddIWADCandidates(dir.GetChars(), false);
+		FString vita_iwad = IWADPathFileSearch("doom2.wad");
+		if (vita_iwad.IsNotEmpty())
+			mFoundWads.Push({ vita_iwad, "",
+				vita_iwad.CompareNoCase("app0:/doom2.wad") == 0 ? vita_doom2_info : -1 });
+	}
+#endif
+	bool scan_candidates = true;
+#if defined(VITA)
+	// With an explicit -iwad the block below resolves that exact file.  Do
+	// not first enumerate all search directories and add duplicate entries.
+	scan_candidates = iwadparm == nullptr && mFoundWads.Size() == 0;
+#endif
+	if (scan_candidates)
+	{
+		// Collect all IWADs in the search path.
+		for (auto &dir : mSearchPaths)
+		{
+			AddIWADCandidates(dir.GetChars());
+		}
+		for (auto& dir : mRecursiveSearchPaths)
+		{
+			AddIWADCandidates(dir.GetChars(), false);
+		}
 	}
 	unsigned numFoundWads = mFoundWads.Size();
 
 	if (iwadparm)
 	{
+#if defined(VITA)
+		// Resolve an explicit Vita IWAD once.  The normal desktop code keeps
+		// searching every configured directory and can append the same app0
+		// archive repeatedly on the Vita filesystem.
+		custwad = iwadparm;
+		FixPathSeperator(custwad);
+		DefaultExtension(custwad, ".wad");
+		FString vita_path;
+		if (FileExists(custwad))
+			vita_path = custwad;
+		else
+			vita_path = IWADPathFileSearch(custwad);
+		if (vita_path.IsNotEmpty())
+			mFoundWads.Push({ vita_path, "",
+				vita_path.CompareNoCase("app0:/doom2.wad") == 0 ? vita_doom2_info : -1 });
+#else
 		const char* const extensions[] = { ".wad", ".pk3", ".iwad", ".ipk3", ".ipk7" };
 
 		for (auto ext : extensions)
@@ -686,6 +740,7 @@ int FIWadManager::IdentifyVersion (std::vector<FileSys::ResourceName>&wadfiles, 
 				break;
 			}
 		}
+		#endif
 
 		// -iwad not found
 		if (mFoundWads.Size() == numFoundWads)
@@ -829,9 +884,17 @@ int FIWadManager::IdentifyVersion (std::vector<FileSys::ResourceName>&wadfiles, 
 
 	// Present the IWAD selection box.
 	bool showlauncher = Args->CheckParm(FArg_showlauncher);
+	// Vita has no desktop launcher workflow.  The package carries a single
+	// bundled Doom IWAD, so select the first discovered entry at startup and
+	// reserve the SDL launcher for an explicit -showlauncher request.
+#if defined(VITA)
+	bool show_selection = showlauncher;
+#else
 	bool alwaysshow = (queryiwad && !Args->CheckParm(FArg_iwad) && !foundprio) || showlauncher;
+	bool show_selection = alwaysshow || picks.Size() > 1;
+#endif
 
-	if (!havepicked && (alwaysshow || picks.Size() > 1))
+	if (!havepicked && show_selection)
 	{
 		TArray<WadStuff> wads;
 		for (auto & found : picks)

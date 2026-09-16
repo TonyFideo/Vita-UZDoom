@@ -114,6 +114,32 @@ unsigned int FHardwareTexture::CreateTexture(unsigned char * buffer, int w, int 
 
 
 	}
+	// VitaGL's GLES2 texture path is reliable with its native RGBA upload
+	// format.  UZDoom's texture buffers are BGRA, and passing BGRA as the
+	// internal format selects Vita's ARGB texture layout directly.  On Vita3K
+	// that leaves the red/blue channels (and, for transparent texels, the
+	// coverage) in the wrong interpretation.  Keep the source buffer intact
+	// and make an explicit RGBA upload buffer for the Vita GLES path.
+	unsigned char *vitaRgbaBuffer = nullptr;
+	unsigned char *vitaOriginalBuffer = buffer;
+#if defined(VITA)
+	if (gles.glesMode == GLES_MODE_GLES && glTextureBytes == 4 && buffer)
+	{
+		vitaRgbaBuffer = (unsigned char *)malloc((size_t)rw * (size_t)rh * 4);
+		if (vitaRgbaBuffer)
+		{
+			for (size_t i = 0; i < (size_t)rw * (size_t)rh; ++i)
+			{
+				vitaRgbaBuffer[i * 4 + 0] = buffer[i * 4 + 2];
+				vitaRgbaBuffer[i * 4 + 1] = buffer[i * 4 + 1];
+				vitaRgbaBuffer[i * 4 + 2] = buffer[i * 4 + 0];
+				vitaRgbaBuffer[i * 4 + 3] = buffer[i * 4 + 3];
+			}
+			buffer = vitaRgbaBuffer;
+		}
+	}
+#endif
+
 	// store the physical size.
 
 	int sourcetype;
@@ -128,8 +154,8 @@ unsigned int FHardwareTexture::CreateTexture(unsigned char * buffer, int w, int 
 		}
 		else
 		{
-			sourcetype = GL_BGRA; // These two must be the same
-			texformat = GL_BGRA;
+			sourcetype = vitaRgbaBuffer ? GL_RGBA : GL_BGRA;
+			texformat = vitaRgbaBuffer ? GL_RGBA : GL_BGRA;
 		}
 	}
 	else
@@ -160,7 +186,8 @@ unsigned int FHardwareTexture::CreateTexture(unsigned char * buffer, int w, int 
 		}
 	}
 
-	if (deletebuffer && buffer) free(buffer);
+	if (deletebuffer && vitaOriginalBuffer) free(vitaOriginalBuffer);
+	if (vitaRgbaBuffer) free(vitaRgbaBuffer);
 
 	if (mipmap && TexFilter[gl_texture_filter].mipmapping)
 	{

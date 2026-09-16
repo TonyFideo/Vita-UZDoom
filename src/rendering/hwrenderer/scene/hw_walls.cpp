@@ -157,7 +157,7 @@ void HWWall::RenderMirrorSurface(HWWallDispatcher*di, FRenderState &state)
 	state.AlphaFunc(Alpha_Greater, 0);
 
 	auto tex = TexMan.GetGameTexture(TexMan.mirrorTexture, false);
-	state.SetMaterial(tex, UF_None, 0, CLAMP_NONE, NO_TRANSLATION, -1, nullptr); // do not upscale the mirror texture.
+	state.SetMaterial(tex, UF_None, 0, CLAMP_NONE, NO_TRANSLATION, -1); // do not upscale the mirror texture.
 
 	flags &= ~HWWall::HWF_GLOW;
 	RenderWall(state, HWWall::RWF_BLANK);
@@ -213,7 +213,7 @@ void HWWall::RenderTexturedWall(HWWallDispatcher*di, FRenderState &state, int rf
 		state.SetGlowParams(topglowcolor, bottomglowcolor);
 		SetGlowPlanes(state, frontsector->ceilingplane, frontsector->floorplane);
 	}
-	state.SetMaterial(texture, UF_Texture, 0, flags & 3, NO_TRANSLATION, -1, nullptr);
+	state.SetMaterial(texture, UF_Texture, 0, flags & 3, NO_TRANSLATION, -1);
 #ifdef NPOT_EMULATION
 	// Test code, could be reactivated as a compatibility option in the unlikely event that some old vanilla map eve needs it.
 	if (hw_npottest)
@@ -2138,7 +2138,7 @@ CVAR(Int, bottomskew, 0, 0)
 //
 //
 //==========================================================================
-void HWWall::Process(HWWallDispatcher *di, seg_t *seg, sector_t * frontsector, sector_t * backsector, bool isculled)
+void HWWall::Process(HWWallDispatcher *di, seg_t *seg, sector_t * frontsector, sector_t * backsector)
 {
 	vertex_t * v1, *v2;
 	float fch1;
@@ -2256,25 +2256,6 @@ void HWWall::Process(HWWallDispatcher *di, seg_t *seg, sector_t * frontsector, s
 	{
 		SkyNormal(di, frontsector, v1, v2);
 		DoHorizon(di, seg, frontsector, v1, v2);
-		return;
-	}
-
-	if (isculled)
-	{
-		if (frontsector->GetTexture(sector_t::ceiling) == skyflatnum)
-		{
-			SkyNormal(di, frontsector, v1, v2);
-		}
-		else
-		{
-			texture = TexMan.GetGameTexture(frontsector->GetTexture(sector_t::ceiling), true);
-			if (texture && texture->isValid())
-			{
-				DoTexture(di, RENDERWALL_TOP, seg, true,
-					crefz, frefz,
-					fch1, fch2, ffh1, ffh2, 0, 0);
-			}
-		}
 		return;
 	}
 

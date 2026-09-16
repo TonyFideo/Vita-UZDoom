@@ -29,7 +29,6 @@
 #include "engineerrors.h"
 #include "version.h"
 #include "cmdlib.h"
-#include "hw_viewpointuniforms.h"
 
 ShaderIncludeResult VkShaderManager::OnInclude(FString headerName, FString includerName, size_t depth)
 {
@@ -45,12 +44,7 @@ ShaderIncludeResult VkShaderManager::OnInclude(FString headerName, FString inclu
 	code << "#define " << includeguardname.GetChars() << "\n";
 	code << "#line 1\n";
 
-	int lumpNum = fileSystem.CheckNumForFullName(headerName.GetChars(), 0); // look in engine pk3 first
-
-	if(lumpNum == -1)
-	{
-		lumpNum = fileSystem.CheckNumForFullName(headerName.GetChars());
-	}
+	int lumpNum = fileSystem.FindFile(headerName.GetChars());
 
 	if(lumpNum >= 0)
 	{
@@ -72,11 +66,9 @@ bool VkShaderManager::CompileNextShader()
 	{
 		// regular material shaders
 
-		assert(i < MATERIAL_SHADER_COUNT);
-
 		VkShaderProgram prog;
-		prog.vert = LoadVertShader(defaultshaders[i].ShaderName, mainvp, defaultshaders[i].Defines, static_cast<AllShaderIndex>(i));
-		prog.frag = LoadFragShader(defaultshaders[i].ShaderName, mainfp, defaultshaders[i].gettexelfunc, defaultshaders[i].lightfunc, defaultshaders[i].Defines, true, compilePass == GBUFFER_PASS, static_cast<AllShaderIndex>(i));
+		prog.vert = LoadVertShader(defaultshaders[i].ShaderName, mainvp, defaultshaders[i].Defines);
+		prog.frag = LoadFragShader(defaultshaders[i].ShaderName, mainfp, defaultshaders[i].gettexelfunc, defaultshaders[i].lightfunc, defaultshaders[i].Defines, true, compilePass == GBUFFER_PASS);
 		mMaterialShaders[compilePass].push_back(std::move(prog));
 
 		compileIndex++;
@@ -90,11 +82,9 @@ bool VkShaderManager::CompileNextShader()
 	{
 		// NAT material shaders
 
-		assert(i < MATERIAL_SHADER_COUNT);
-
 		VkShaderProgram natprog;
-		natprog.vert = LoadVertShader(defaultshaders[i].ShaderName, mainvp, defaultshaders[i].Defines, static_cast<AllShaderIndex>(i));
-		natprog.frag = LoadFragShader(defaultshaders[i].ShaderName, mainfp, defaultshaders[i].gettexelfunc, defaultshaders[i].lightfunc, defaultshaders[i].Defines, false, compilePass == GBUFFER_PASS, static_cast<AllShaderIndex>(i));
+		natprog.vert = LoadVertShader(defaultshaders[i].ShaderName, mainvp, defaultshaders[i].Defines);
+		natprog.frag = LoadFragShader(defaultshaders[i].ShaderName, mainfp, defaultshaders[i].gettexelfunc, defaultshaders[i].lightfunc, defaultshaders[i].Defines, false, compilePass == GBUFFER_PASS);
 		mMaterialShadersNAT[compilePass].push_back(std::move(natprog));
 
 		compileIndex++;
@@ -108,16 +98,13 @@ bool VkShaderManager::CompileNextShader()
 	else if (compileState == 2)
 	{
 		// user shaders
-		auto &shader = usershaders[i];
 
-		assert(shader.shaderType < MATERIAL_SHADER_COUNT);
-
-		const FString& name = ExtractFileBase(shader.shader.GetChars());
-		FString defines = defaultshaders[shader.shaderType].Defines + shader.defines;
+		const FString& name = ExtractFileBase(usershaders[i].shader.GetChars());
+		FString defines = defaultshaders[usershaders[i].shaderType].Defines + usershaders[i].defines;
 
 		VkShaderProgram prog;
-		prog.vert = LoadVertShader(name, mainvp, defines.GetChars(), static_cast<AllShaderIndex>(shader.shaderType));
-		prog.frag = LoadFragShader(name, mainfp, shader.shader.GetChars(), defaultshaders[shader.shaderType].lightfunc, defines.GetChars(), true, compilePass == GBUFFER_PASS, static_cast<AllShaderIndex>(shader.shaderType));
+		prog.vert = LoadVertShader(name, mainvp, defines.GetChars());
+		prog.frag = LoadFragShader(name, mainfp, usershaders[i].shader.GetChars(), defaultshaders[usershaders[i].shaderType].lightfunc, defines.GetChars(), true, compilePass == GBUFFER_PASS);
 		mMaterialShaders[compilePass].push_back(std::move(prog));
 
 		compileIndex++;
@@ -131,11 +118,9 @@ bool VkShaderManager::CompileNextShader()
 	{
 		// Effect shaders
 
-		assert(i < EFFECT_SHADER_COUNT);
-
 		VkShaderProgram prog;
-		prog.vert = LoadVertShader(effectshaders[i].ShaderName, effectshaders[i].vp, effectshaders[i].defines, static_cast<AllShaderIndex>(i + FIRST_EFFECT_SHADER));
-		prog.frag = LoadFragShader(effectshaders[i].ShaderName, effectshaders[i].fp1, effectshaders[i].fp2, effectshaders[i].fp3, effectshaders[i].defines, true, compilePass == GBUFFER_PASS, static_cast<AllShaderIndex>(i + FIRST_EFFECT_SHADER));
+		prog.vert = LoadVertShader(effectshaders[i].ShaderName, effectshaders[i].vp, effectshaders[i].defines);
+		prog.frag = LoadFragShader(effectshaders[i].ShaderName, effectshaders[i].fp1, effectshaders[i].fp2, effectshaders[i].fp3, effectshaders[i].defines, true, compilePass == GBUFFER_PASS);
 		mEffectShaders[compilePass].push_back(std::move(prog));
 
 		compileIndex++;
@@ -201,6 +186,28 @@ static const char *shaderBindings = R"(
 	#ifdef SUPPORTS_RAYTRACING
 	layout(set = 0, binding = 2) uniform accelerationStructureEXT TopLevelAS;
 	#endif
+
+	// This must match the HWViewpointUniforms struct
+	layout(set = 1, binding = 0, std140) uniform readonly ViewpointUBO {
+		mat4 ProjectionMatrix;
+		mat4 ViewMatrix;
+		mat4 NormalViewMatrix;
+
+		vec4 uCameraPos;
+		vec4 uClipLine;
+
+		float uGlobVis;			// uGlobVis = R_GetGlobVis(r_visibility) / 32.0
+		int uPalLightLevels;
+		int uViewHeight;		// Software fuzz scaling
+		float uClipHeight;
+		float uClipHeightDirection;
+		int uShadowmapFilter;
+
+		int uLightBlendMode;
+
+		float uThickFogDistance;
+		float uThickFogMultiplier;
+	};
 
 	layout(set = 1, binding = 1, std140) uniform readonly MatricesUBO {
 		mat4 ModelMatrix;
@@ -360,7 +367,7 @@ static const char *shaderBindings = R"(
 	vec4 noise4(vec4) { return vec4(0); }
 )";
 
-std::unique_ptr<VulkanShader> VkShaderManager::LoadVertShader(FString shadername, const char *vert_lump, const char *defines, AllShaderIndex type)
+std::unique_ptr<VulkanShader> VkShaderManager::LoadVertShader(FString shadername, const char *vert_lump, const char *defines)
 {
 	FString code = GetTargetGlslVersion();
 	code << "#extension GL_GOOGLE_include_directive : enable\n";
@@ -370,8 +377,6 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadVertShader(FString shadername
 	code << "#define NPOT_EMULATION\n";
 #endif
 	code << shaderBindings;
-	code << "layout(set = 1, binding = 0, std140) uniform readonly ViewpointUBO" << ShaderInputsOutputs::GenerateStruct<HWViewpointUniforms>() << ";\n";
-	code << ShaderInputsOutputs::GenerateInputsOutputs(true, false, type, false, fb->device->EnabledFeatures.Features.shaderClipDistance);
 	if (!fb->device->EnabledFeatures.Features.shaderClipDistance) code << "#define NO_CLIPDISTANCE_SUPPORT\n";
 	code << "#line 1\n";
 	code << LoadPrivateShaderLump(vert_lump).GetChars() << "\n";
@@ -385,21 +390,19 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadVertShader(FString shadername
 		.Create(shadername.GetChars(), fb->device.get());
 }
 
-std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername, const char *frag_lump, const char *material_lump, const char *light_lump, const char *defines, bool alphatest, bool gbufferpass, AllShaderIndex type)
+std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername, const char *frag_lump, const char *material_lump, const char *light_lump, const char *defines, bool alphatest, bool gbufferpass)
 {
-	FString pre_placeholder = GetTargetGlslVersion();
-	pre_placeholder << "#extension GL_GOOGLE_include_directive : enable\n";
+	FString code = GetTargetGlslVersion();
+	code << "#extension GL_GOOGLE_include_directive : enable\n";
 	if (fb->RaytracingEnabled())
-		pre_placeholder << "\n#define SUPPORTS_RAYTRACING\n";
-
-	FString code = defines;
+		code << "\n#define SUPPORTS_RAYTRACING\n";
+	code << defines;
+	code << "\n$placeholder$";	// here the code can later add more needed #defines.
 	code << "\n#define MAX_STREAM_DATA " << std::to_string(MAX_STREAM_DATA).c_str() << "\n";
 #ifdef NPOT_EMULATION
 	code << "#define NPOT_EMULATION\n";
 #endif
 	code << shaderBindings;
-	code << "layout(set = 1, binding = 0, std140) uniform readonly ViewpointUBO" << ShaderInputsOutputs::GenerateStruct<HWViewpointUniforms>() << ";\n";
-	code << ShaderInputsOutputs::GenerateInputsOutputs(true, true, type, gbufferpass, fb->device->EnabledFeatures.Features.shaderClipDistance);
 	FString placeholder = "\n";
 
 	if (!fb->device->EnabledFeatures.Features.shaderClipDistance) code << "#define NO_CLIPDISTANCE_SUPPORT\n";
@@ -432,14 +435,15 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername
 						// this looks like an even older custom hardware shader.
 						// We need to replace the ProcessTexel call to make it work.
 
-						placeholder << "#define NO_PROCESS_TEXEL\n";
+						code.Substitute("material.Base = ProcessTexel();", "material.Base = Process(vec4(1.0));");
 					}
 				}
 
 				if (pp_code.IndexOf("ProcessLight") >= 0)
 				{
 					// The ProcessLight signatured changed. Forward to the old one.
-					placeholder << "#define OLD_PROCESSLIGHT\n";
+					code << "\nvec4 ProcessLight(vec4 color);\n";
+					code << "\nvec4 ProcessLight(Material material, vec4 color) { return ProcessLight(color); }\n";
 				}
 			}
 
@@ -465,8 +469,7 @@ std::unique_ptr<VulkanShader> VkShaderManager::LoadFragShader(FString shadername
 			code << (material_lump + 1) << "\n";
 		}
 	}
-
-	code = pre_placeholder + placeholder + code;
+	code.Substitute("$placeholder$", placeholder);
 
 	if (light_lump)
 	{

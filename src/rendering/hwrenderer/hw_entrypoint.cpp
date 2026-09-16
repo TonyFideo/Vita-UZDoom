@@ -156,7 +156,7 @@ sector_t* RenderViewpoint(FRenderViewpoint& mainvp, AActor* camera, IntRect* bou
 		float inv_iso_dist = 1.0f;
 		bool iso_ortho = (camera->ViewPos != NULL) && (camera->ViewPos->Flags & VPSF_ORTHOGRAPHIC);
 		if (iso_ortho && (camera->ViewPos->Offset.Length() > 0)) inv_iso_dist = 1.0/camera->ViewPos->Offset.Length();
-		di->VPUniforms.ProjectionMatrix = eye.GetProjection(fov, ratio, fovratio * inv_iso_dist, iso_ortho);
+		di->VPUniforms.mProjectionMatrix = eye.GetProjection(fov, ratio, fovratio * inv_iso_dist, iso_ortho);
 		di->ProjectionMatrix2 = eye.GetProjection(fov, ratio, fovratio, false); // Regular ol' perspective projection matrix
 
 		// Stereo mode specific viewpoint adjustment
@@ -310,6 +310,18 @@ static void CheckTimer(FRenderState &state, uint64_t ShaderStartTime)
 
 sector_t* RenderView(player_t* player)
 {
+	// The Vita software framebuffer deliberately has no hardware RenderState
+	// or vertex buffers.  Select the software scene before touching those
+	// hardware-only interfaces.
+	if (!V_IsHardwareRenderer())
+	{
+		screen->SetActiveRenderTarget();
+		if (!swdrawer) swdrawer = new SWSceneDrawer;
+		sector_t *retsec = swdrawer->RenderView(player);
+		All.Unclock();
+		return retsec;
+	}
+
 	auto RenderState = screen->RenderState();
 	RenderState->SetVertexBuffer(screen->mVertexData);
 	screen->mVertexData->Reset();
@@ -321,14 +333,6 @@ sector_t* RenderView(player_t* player)
 	}
 
 	sector_t* retsec;
-	if (!V_IsHardwareRenderer())
-	{
-		screen->SetActiveRenderTarget();	// only relevant for Vulkan
-
-		if (!swdrawer) swdrawer = new SWSceneDrawer;
-		retsec = swdrawer->RenderView(player);
-	}
-	else
 	{
 		hw_ClearFakeFlat();
 

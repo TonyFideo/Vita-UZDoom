@@ -30,6 +30,8 @@
  * version: 1.8
  */
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "nukedopl3.h"
 
@@ -608,7 +610,7 @@ static void OPL3_EnvelopeCalc(opl3_slot *slot)
         }
         else
         {
-            shift = (rate_hi & 0x03) + eg_incstep[rate_lo][slot->chip->eg_timer_lo];
+            shift = (rate_hi & 0x03) + eg_incstep[rate_lo][slot->chip->timer & 0x03u];
             if (shift & 0x04)
             {
                 shift = 0x03;
@@ -1335,7 +1337,7 @@ static void OPL3_ProcessSlot(opl3_slot *slot)
     OPL3_SlotGenerate(slot);
 }
 
-void OPL3_Generate4Ch(opl3_chip *chip, int16_t *buf4)
+inline void OPL3_Generate4Ch(opl3_chip *chip, int16_t *buf4)
 {
     opl3_channel *channel;
     opl3_writebuf *writebuf;
@@ -1400,7 +1402,7 @@ void OPL3_Generate4Ch(opl3_chip *chip, int16_t *buf4)
         mix[0] += (int16_t)((accm * channel->rightpan) >> 16);
 #else
         mix[0] += (int16_t)((accm * chip->channel[ii].chr / 65535) & channel->chb);
- #endif
+#endif
         mix[1] += (int16_t)(accm & channel->chd);
     }
     chip->mixbuff[1] = mix[0];
@@ -1433,9 +1435,10 @@ void OPL3_Generate4Ch(opl3_chip *chip, int16_t *buf4)
 
     chip->timer++;
 
-    if (chip->eg_state)
+    chip->eg_add = 0;
+    if (chip->eg_timer)
     {
-        while (shift < 13 && ((chip->eg_timer >> shift) & 1) == 0)
+        while (shift < 36 && ((chip->eg_timer >> shift) & 1) == 0)
         {
             shift++;
         }
@@ -1447,7 +1450,6 @@ void OPL3_Generate4Ch(opl3_chip *chip, int16_t *buf4)
         {
             chip->eg_add = shift + 1;
         }
-        chip->eg_timer_lo = (uint8_t)(chip->eg_timer & 0x3u);
     }
 
     if (chip->eg_timerrem || chip->eg_state)

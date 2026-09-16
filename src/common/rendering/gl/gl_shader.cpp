@@ -293,7 +293,7 @@ FString ProcessShaderError(const char * shaderError, TArray<FString> &filenames_
 	return err;
 }
 
-bool FShader::Load(const char * name, const char * vert_prog_lump, const char * frag_prog_lump, const char * proc_prog_lump, const char * light_fragprog, const char * defines, bool isGBuffer, AllShaderIndex type)
+bool FShader::Load(const char * name, const char * vert_prog_lump, const char * frag_prog_lump, const char * proc_prog_lump, const char * light_fragprog, const char * defines)
 {
 	FString error;
 
@@ -301,6 +301,28 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 		// these settings are actually pointless but there seem to be some old ATI drivers that fail to compile the shader without setting the precision here.
 		precision highp int;
 		precision highp float;
+
+		// This must match the HWViewpointUniforms struct
+		layout(std140) uniform ViewpointUBO {
+			mat4 ProjectionMatrix;
+			mat4 ViewMatrix;
+			mat4 NormalViewMatrix;
+
+			vec4 uCameraPos;
+			vec4 uClipLine;
+
+			float uGlobVis;			// uGlobVis = R_GetGlobVis(r_visibility) / 32.0
+			int uPalLightLevels;
+			int uViewHeight;		// Software fuzz scaling
+			float uClipHeight;
+			float uClipHeightDirection;
+			int uShadowmapFilter;
+
+			int uLightBlendMode;
+
+			float uThickFogDistance;
+			float uThickFogMultiplier;
+		};
 
 		uniform int uTextureMode;
 		uniform vec2 uClipSplit;
@@ -447,42 +469,32 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 //
 // The following code uses GetChars on the strings to get rid of terminating 0 characters. Do not remove or the code may break!
 //
-	FString pre_placeholder;
+	FString vp_comb;
 
 	assert(screen->mLights != NULL);
 	assert(screen->mBones != NULL);
 
 
 	if ((gl.flags & RFL_SHADER_STORAGE_BUFFER) && screen->allowSSBO())
-		pre_placeholder << "#version 430 core\n#define SUPPORTS_SHADOWMAPS\n";
+		vp_comb << "#version 430 core\n#define SUPPORTS_SHADOWMAPS\n";
 	else
-		pre_placeholder << "#version 330 core\n";
+		vp_comb << "#version 330 core\n";
 
 	bool lightbuffertype = screen->mLights->GetBufferType();
 	if (!lightbuffertype)
-		pre_placeholder.AppendFormat("#define NUM_UBO_LIGHTS %d\n#define NUM_UBO_BONES %d\n", screen->mLights->GetBlockSize(), screen->mBones->GetBlockSize());
+		vp_comb.AppendFormat("#define NUM_UBO_LIGHTS %d\n#define NUM_UBO_BONES %d\n", screen->mLights->GetBlockSize(), screen->mBones->GetBlockSize());
 	else
-		pre_placeholder << "#define SHADER_STORAGE_LIGHTS\n#define SHADER_STORAGE_BONES\n";
+		vp_comb << "#define SHADER_STORAGE_LIGHTS\n#define SHADER_STORAGE_BONES\n";
 
-	if(isGBuffer)
-	{
-		pre_placeholder << "\n#define GBUFFER_PASS\n";
-	}
-
-	pre_placeholder << "layout(std140) uniform ViewpointUBO" << ShaderInputsOutputs::GenerateStruct<HWViewpointUniforms>() << ";\n";
-
-	FString vp_comb = defines;
-	vp_comb << i_data.GetChars();
-	vp_comb << ShaderInputsOutputs::GenerateInputsOutputs(false, false, type, false, true);
-	FString fp_comb = defines;
-	fp_comb << i_data.GetChars();
-	fp_comb << ShaderInputsOutputs::GenerateInputsOutputs(false, true, type, isGBuffer, true);
+	FString fp_comb = vp_comb;
+	vp_comb << defines << i_data.GetChars();
+	fp_comb << "$placeholder$\n" << defines << i_data.GetChars();
 
 	vp_comb << "#line 1\n";
 	fp_comb << "#line 1\n";
 
-	vp_comb << GetStringFromLump(vp_lump).GetChars() << "\n";
-	fp_comb << GetStringFromLump(fp_lump).GetChars() << "\n";
+	vp_comb << RemoveLayoutLocationDecl(GetStringFromLump(vp_lump), "out").GetChars() << "\n";
+	fp_comb << RemoveLayoutLocationDecl(GetStringFromLump(fp_lump), "in").GetChars() << "\n";
 	FString placeholder = "\n";
 	TArray<FString> filenames_for_error;
 
@@ -540,14 +552,16 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 					{
 						// this looks like an even older custom hardware shader.
 						// We need to replace the ProcessTexel call to make it work.
-						placeholder << "#define NO_PROCESS_TEXEL\n";
+
+						fp_comb.Substitute("material.Base = ProcessTexel();", "material.Base = Process(vec4(1.0));");
 					}
 				}
 
 				if (pp_data.IndexOf("ProcessLight") >= 0)
 				{
 					// The ProcessLight signatured changed. Forward to the old one.
-					placeholder << "#define OLD_PROCESSLIGHT\n";
+					fp_comb << "\nvec4 ProcessLight(vec4 color);\n";
+					fp_comb << "\nvec4 ProcessLight(Material material, vec4 color) { return ProcessLight(color); }\n";
 				}
 			}
 
@@ -574,11 +588,7 @@ bool FShader::Load(const char * name, const char * vert_prog_lump, const char * 
 			fp_comb << proc_prog_lump + 1;
 		}
 	}
-	fp_comb = pre_placeholder + placeholder + fp_comb;
-	placeholder = "\n";
-	vp_comb = pre_placeholder + placeholder + vp_comb;
-
-
+	fp_comb.Substitute("$placeholder$", placeholder);
 
 	if (light_fragprog)
 	{
@@ -814,18 +824,19 @@ bool FShader::Bind()
 //
 //==========================================================================
 
-FShader *FShaderCollection::Compile (const char *ShaderName, const char *ShaderPath, const char *LightModePath, const char *shaderdefines, bool usediscard, EPassType passType, AllShaderIndex type)
+FShader *FShaderCollection::Compile (const char *ShaderName, const char *ShaderPath, const char *LightModePath, const char *shaderdefines, bool usediscard, EPassType passType)
 {
 	FString defines;
 	if (shaderdefines) defines += shaderdefines;
 	// this can't be in the shader code due to ATI strangeness.
 	if (!usediscard) defines += "#define NO_ALPHATEST\n";
+	if (passType == GBUFFER_PASS) defines += "#define GBUFFER_PASS\n";
 
 	FShader *shader = NULL;
 	try
 	{
 		shader = new FShader(ShaderName);
-		if (!shader->Load(ShaderName, "shaders/glsl/main.vp", "shaders/glsl/main.fp", ShaderPath, LightModePath, defines.GetChars(), (passType == GBUFFER_PASS), type))
+		if (!shader->Load(ShaderName, "shaders/glsl/main.vp", "shaders/glsl/main.fp", ShaderPath, LightModePath, defines.GetChars()))
 		{
 			I_FatalError("Unable to load shader %s\n", ShaderName);
 		}
@@ -944,8 +955,8 @@ bool FShaderCollection::CompileNextShader()
 {
 	int i = mCompileIndex;
 	if (mCompileState == 0)
-	{ // regular shaders
-		FShader *shc = Compile(defaultshaders[i].ShaderName, defaultshaders[i].gettexelfunc, defaultshaders[i].lightfunc, defaultshaders[i].Defines, true, mPassType, static_cast<AllShaderIndex>(i));
+	{
+		FShader *shc = Compile(defaultshaders[i].ShaderName, defaultshaders[i].gettexelfunc, defaultshaders[i].lightfunc, defaultshaders[i].Defines, true, mPassType);
 		mMaterialShaders.Push(shc);
 		mCompileIndex++;
 		if (defaultshaders[mCompileIndex].ShaderName == nullptr)
@@ -956,8 +967,8 @@ bool FShaderCollection::CompileNextShader()
 		}
 	}
 	else if (mCompileState == 1)
-	{ // noalphatest shaders
-		FShader *shc1 = Compile(defaultshaders[i].ShaderName, defaultshaders[i].gettexelfunc, defaultshaders[i].lightfunc, defaultshaders[i].Defines, false, mPassType, static_cast<AllShaderIndex>(i));
+	{
+		FShader *shc1 = Compile(defaultshaders[i].ShaderName, defaultshaders[i].gettexelfunc, defaultshaders[i].lightfunc, defaultshaders[i].Defines, false, mPassType);
 		mMaterialShadersNAT.Push(shc1);
 		mCompileIndex++;
 		if (mCompileIndex >= SHADER_NoTexture)
@@ -968,11 +979,10 @@ bool FShaderCollection::CompileNextShader()
 		}
 	}
 	else if (mCompileState == 2)
-	{ // user shaders
-		auto &shader = usershaders[i];
-		FString name = ExtractFileBase(shader.shader.GetChars());
-		FString defines = defaultshaders[shader.shaderType].Defines + shader.defines;
-		FShader *shc = Compile(name.GetChars(), shader.shader.GetChars(), defaultshaders[shader.shaderType].lightfunc, defines.GetChars(), true, mPassType, static_cast<AllShaderIndex>(shader.shaderType));
+	{
+		FString name = ExtractFileBase(usershaders[i].shader.GetChars());
+		FString defines = defaultshaders[usershaders[i].shaderType].Defines + usershaders[i].defines;
+		FShader *shc = Compile(name.GetChars(), usershaders[i].shader.GetChars(), defaultshaders[usershaders[i].shaderType].lightfunc, defines.GetChars(), true, mPassType);
 		mMaterialShaders.Push(shc);
 		mCompileIndex++;
 		if (mCompileIndex >= (int)usershaders.Size())
@@ -982,10 +992,10 @@ bool FShaderCollection::CompileNextShader()
 		}
 	}
 	else if (mCompileState == 3)
-	{ // effect shaders
+	{
 		FShader *eff = new FShader(effectshaders[i].ShaderName);
 		if (!eff->Load(effectshaders[i].ShaderName, effectshaders[i].vp, effectshaders[i].fp1,
-						effectshaders[i].fp2, effectshaders[i].fp3, effectshaders[i].defines, (mPassType == GBUFFER_PASS), static_cast<AllShaderIndex>(i + FIRST_EFFECT_SHADER)))
+						effectshaders[i].fp2, effectshaders[i].fp3, effectshaders[i].defines))
 		{
 			delete eff;
 		}
@@ -1072,67 +1082,5 @@ void gl_DestroyUserShaders()
 {
 	// todo
 }
+
 }
-
-#define GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX 0x9047
-#define GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX 0x9048
-#define GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX 0x9049
-#define GPU_MEMORY_INFO_EVICTION_COUNT_NVX 0x904A
-#define GPU_MEMORY_INFO_EVICTED_MEMORY_NVX 0x904B
-
-#define VBO_FREE_MEMORY_ATI 0x87FB
-#define TEXTURE_FREE_MEMORY_ATI 0x87FC
-#define RENDERBUFFER_FREE_MEMORY_ATI 0x87FD
-
-static FString FormatKB(int kb)
-{
-	int gb = kb / (1024 * 1024);
-	kb -= gb * (1024 * 1024);
-	int mb = kb / 1024;
-	kb -= mb * 1024;
-	FString tmp = "";
-	tmp.Format("%d GB %d MB %d KB", gb, mb, kb);
-	return tmp;
-}
-
-void PrintVRAM_NV(FString &out)
-{
-	int dedicatedMemoryNVidia = -1;
-	glGetIntegerv(GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX, &dedicatedMemoryNVidia);
-	int totalMemoryNVidia = -1;
-	glGetIntegerv(GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, &totalMemoryNVidia);
-	int freeMemoryNVidia = -1;
-	glGetIntegerv(GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, &freeMemoryNVidia);
-	int evictionCountNVidia = -1;
-	glGetIntegerv(GPU_MEMORY_INFO_EVICTION_COUNT_NVX, &evictionCountNVidia);
-	int evictedMemoryNVidia = -1;
-	glGetIntegerv(GPU_MEMORY_INFO_EVICTED_MEMORY_NVX, &evictedMemoryNVidia);
-
-	out.AppendFormat("Dedicated VRAM: %s\n", FormatKB(dedicatedMemoryNVidia).GetChars());
-	out.AppendFormat("Total VRAM: %s\n", FormatKB(totalMemoryNVidia).GetChars());
-	out.AppendFormat("Free VRAM: %s\n", FormatKB(freeMemoryNVidia).GetChars());
-	out.AppendFormat("Eviction Count: %d\n", evictionCountNVidia);
-	out.AppendFormat("Evicted Memory: %s", FormatKB(evictedMemoryNVidia).GetChars());
-}
-
-void PrintVRAM_ATI(FString &out)
-{
-	struct gpu_memory_info_t
-	{
-		int total_free = -1;
-		int largest_block = -1;
-		int total_aux_free = -1;
-		int largest_aux_block = -1;
-	};
-
-	gpu_memory_info_t texture_free_memory;
-
-	glGetIntegerv(TEXTURE_FREE_MEMORY_ATI, &texture_free_memory.total_free);
-
-	out.AppendFormat("VRAM:\n");
-	out.AppendFormat("    Total Free: %s\n", FormatKB(texture_free_memory.total_free).GetChars());
-	out.AppendFormat("    Largest Free Block: %s\n", FormatKB(texture_free_memory.largest_block).GetChars());
-	out.AppendFormat("    Total Aux. Free: %s\n", FormatKB(texture_free_memory.total_aux_free).GetChars());
-	out.AppendFormat("    Largest Free Aux. Block: %s\n", FormatKB(texture_free_memory.largest_aux_block).GetChars());
-}
-

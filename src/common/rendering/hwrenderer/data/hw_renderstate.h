@@ -26,7 +26,6 @@
 struct FColormap;
 class IVertexBuffer;
 class IIndexBuffer;
-class PClass;
 
 enum EClearTarget
 {
@@ -627,7 +626,7 @@ public:
 	}
 
 private:
-	void SetMaterial(FMaterial *mat, int clampmode, int translation, int overrideshader, PClass * cls)
+	void SetMaterial(FMaterial *mat, int clampmode, int translation, int overrideshader)
 	{
 		mMaterial.mMaterial = mat;
 		mMaterial.mClampMode = clampmode;
@@ -640,7 +639,7 @@ private:
 	}
 
 public:
-	void SetMaterial(FGameTexture* tex, EUpscaleFlags upscalemask, int scaleflags, int clampmode, int translation, int overrideshader, PClass *cls)
+	void SetMaterial(FGameTexture* tex, EUpscaleFlags upscalemask, int scaleflags, int clampmode, int translation, int overrideshader)
 	{
 		tex->setSeen();
 		if (!sysCallbacks.PreBindTexture || !sysCallbacks.PreBindTexture(this, tex, upscalemask, scaleflags, clampmode, translation, overrideshader))
@@ -649,12 +648,12 @@ public:
 		}
 		auto mat = FMaterial::ValidateTexture(tex, scaleflags);
 		assert(mat);
-		SetMaterial(mat, clampmode, translation, overrideshader, cls);
+		SetMaterial(mat, clampmode, translation, overrideshader);
 	}
 
-	void SetMaterial(FGameTexture* tex, EUpscaleFlags upscalemask, int scaleflags, int clampmode, FTranslationID translation, int overrideshader, PClass *cls)
+	void SetMaterial(FGameTexture* tex, EUpscaleFlags upscalemask, int scaleflags, int clampmode, FTranslationID translation, int overrideshader)
 	{
-		SetMaterial(tex, upscalemask, scaleflags, clampmode, translation.index(), overrideshader, cls);
+		SetMaterial(tex, upscalemask, scaleflags, clampmode, translation.index(), overrideshader);
 	}
 
 

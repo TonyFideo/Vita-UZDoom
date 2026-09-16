@@ -82,7 +82,7 @@ public:
 		lastMaterial = nullptr;
 	}
 
-	void ApplyMaterial();
+	void ApplyMaterial(FMaterial *mat, int clampmode, int translation, int overrideshader);
 
 	void Apply();
 	void ApplyBuffers();

@@ -2,7 +2,7 @@
  * libADLMIDI is a free Software MIDI synthesizer library with OPL3 emulation
  *
  * Original ADLMIDI code: Copyright (c) 2010-2014 Joel Yliluoma <bisqwit@iki.fi>
- * ADLMIDI Library API:   Copyright (c) 2015-2026 Vitaly Novichkov <admin@wohlnet.ru>
+ * ADLMIDI Library API:   Copyright (c) 2015-2025 Vitaly Novichkov <admin@wohlnet.ru>
  *
  * Library is based on the ADLMIDI, a MIDI player for Linux and Windows with OPL3 emulation:
  * http://iki.fi/bisqwit/source/adlmidi.html
@@ -28,43 +28,22 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-#ifdef ENABLE_HW_OPL_DOS
-#   include "adlmidi_dos.h"
-#endif
-
 /*
   Generic deleters for smart pointers
  */
 template <class T>
 struct ADLMIDI_DefaultDelete
 {
-    void operator()(T *x)
-    {
-#ifdef ENABLE_HW_OPL_DOS
-        adl_dpmi_unlock_memory(x, sizeof(T));
-#endif
-        delete x;
-    }
+    void operator()(T *x) { delete x; }
 };
-
 template <class T>
 struct ADLMIDI_DefaultArrayDelete
 {
-    void operator()(T *x)
-    {
-#ifdef ENABLE_HW_OPL_DOS
-        adl_dpmi_unlock_memory(x, sizeof(T));
-#endif
-        delete[] x;
-    }
+    void operator()(T *x) { delete[] x; }
 };
-
 struct ADLMIDI_CDelete
 {
-    void operator()(void *x)
-    {
-        free(x);
-    }
+    void operator()(void *x) { free(x); }
 };
 
 /*
@@ -73,17 +52,10 @@ struct ADLMIDI_CDelete
 template< class T, class Deleter = ADLMIDI_DefaultDelete<T> >
 class AdlMIDI_UPtr
 {
-#ifdef ENABLE_HW_OPL_DOS
-public:
-    void dpmi_lock_begin() {}
-private:
-#endif
-
     T *m_p;
 public:
     explicit AdlMIDI_UPtr(T *p = NULL)
         : m_p(p) {}
-
     ~AdlMIDI_UPtr()
     {
         reset();
@@ -91,19 +63,12 @@ public:
 
     void reset(T *p = NULL)
     {
-        if(p != m_p)
-        {
-            if(m_p)
-            {
+        if(p != m_p) {
+            if(m_p) {
                 Deleter del;
                 del(m_p);
             }
-
             m_p = p;
-#ifdef ENABLE_HW_OPL_DOS
-            if(m_p)
-                adl_dpmi_lock_memory(m_p, sizeof(T));
-#endif
         }
     }
 
@@ -116,30 +81,21 @@ public:
     {
         return m_p;
     }
-
     T &operator*() const
     {
         return *m_p;
     }
-
     T *operator->() const
     {
         return m_p;
     }
-
     T &operator[](size_t index) const
     {
         return m_p[index];
     }
-
 private:
     AdlMIDI_UPtr(const AdlMIDI_UPtr &);
     AdlMIDI_UPtr &operator=(const AdlMIDI_UPtr &);
-
-#ifdef ENABLE_HW_OPL_DOS
-public:
-    void dpmi_lock_end() {}
-#endif
 };
 
 template <class T>
@@ -179,18 +135,12 @@ public:
 template< class T, class Deleter = ADLMIDI_DefaultDelete<T> >
 class AdlMIDI_SPtr
 {
-#ifdef ENABLE_HW_OPL_DOS
-public:
-    void dpmi_lock_begin() {}
-private:
-#endif
-
     T *m_p;
     size_t *m_counter;
 public:
     explicit AdlMIDI_SPtr(T *p = NULL)
         : m_p(p), m_counter(p ? new size_t(1) : NULL) {}
-    virtual ~AdlMIDI_SPtr()
+    ~AdlMIDI_SPtr()
     {
         reset(NULL);
     }
@@ -216,27 +166,17 @@ public:
 
     void reset(T *p = NULL)
     {
-        if(p != m_p)
-        {
-            if(m_p && --*m_counter == 0)
-            {
+        if(p != m_p) {
+            if(m_p && --*m_counter == 0) {
                 Deleter del;
                 del(m_p);
-                if(!p)
-                {
+                if(!p) {
                     delete m_counter;
                     m_counter = NULL;
                 }
             }
-
             m_p = p;
-
-            if(p)
-            {
-#ifdef ENABLE_HW_OPL_DOS
-                if(m_p)
-                    adl_dpmi_lock_memory(m_p, sizeof(T));
-#endif
+            if(p) {
                 if(!m_counter)
                     m_counter = new size_t;
                 *m_counter = 1;
@@ -248,26 +188,18 @@ public:
     {
         return m_p;
     }
-
     T &operator*() const
     {
         return *m_p;
     }
-
     T *operator->() const
     {
         return m_p;
     }
-
     T &operator[](size_t index) const
     {
         return m_p[index];
     }
-
-#ifdef ENABLE_HW_OPL_DOS
-public:
-    void dpmi_lock_end() {}
-#endif
 };
 
 /**
@@ -277,35 +209,9 @@ template<class T>
 class AdlMIDI_SPtrArray :
     public AdlMIDI_SPtr< T, ADLMIDI_DefaultArrayDelete<T> >
 {
-#ifdef ENABLE_HW_OPL_DOS
 public:
-    void dpmi_lock_begin() {}
-private:
-#endif
-    size_t arr_size;
-public:
-    explicit AdlMIDI_SPtrArray(T *p = NULL, size_t size = 0)
-        : AdlMIDI_SPtr< T, ADLMIDI_DefaultArrayDelete<T> >(p), arr_size(size)
-    {}
-
-    ~AdlMIDI_SPtrArray()
-    {
-#ifdef ENABLE_HW_OPL_DOS
-        T *ptr = AdlMIDI_SPtr< T, ADLMIDI_DefaultArrayDelete<T> >::get();
-        if(ptr)
-            adl_dpmi_unlock_memory(ptr, arr_size * sizeof(T));
-#endif
-    }
-
-    void reset_arr(T *ptr, size_t size)
-    {
-        arr_size = size;
-#ifdef ENABLE_HW_OPL_DOS
-        if(ptr)
-            adl_dpmi_lock_memory(ptr, arr_size * sizeof(T));
-#endif
-        AdlMIDI_SPtr< T, ADLMIDI_DefaultArrayDelete<T> >::reset(ptr);
-    }
+    explicit AdlMIDI_SPtrArray(T *p = NULL)
+        : AdlMIDI_SPtr< T, ADLMIDI_DefaultArrayDelete<T> >(p) {}
 };
 
 #endif //ADLMIDI_PTR_HPP_THING

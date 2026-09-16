@@ -31,7 +31,6 @@
 #include "tarray.h"
 
 inline constexpr size_t MAXPLAYERS = 64u;
-inline constexpr int SMAXPLAYERS = static_cast<int>(MAXPLAYERS);
 
 EXTERN_FARG(host);
 EXTERN_FARG(join);

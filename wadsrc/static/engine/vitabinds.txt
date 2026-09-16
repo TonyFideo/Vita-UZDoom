@@ -1,0 +1,40 @@
+// Vita-specific default bindings.
+// Unlisted physical controls remain available to the binding menu, but have
+// no gameplay assignment by default.
+
+unbind pad_b
+unbind pad_x
+unbind pad_y
+unbind lshoulder
+unbind rshoulder
+unbind rthumb
+unbind dpadup
+unbind dpaddown
+unbind paddle_1
+unbind paddle_2
+unbind paddle_3
+unbind paddle_4
+unbind guide
+unbind pad_touchpad
+
+lstickleft +moveleft
+lstickright +moveright
+lstickup +forward
+lstickdown +back
+rstickleft +left
+rstickright +right
+rstickup +lookup
+rstickdown +lookdown
+
+// Vita SDL maps Pad_A to the physical Cross/X button.
+pad_a +use
+ltrigger +altattack
+rtrigger +attack
+pad_start menu_main
+pad_back togglemap
+dpadleft weapprev
+dpadright weapnext
+
+backtouch_left crouch
+backtouch_right +jump
+backtouch_hold +speed

@@ -32,7 +32,7 @@ class DCeiling : public DMovingCeiling
 {
 	DECLARE_CLASS (DCeiling, DMovingCeiling)
 public:
-	enum ECeiling
+	enum ECeiling : int
 	{
 		ceilLowerByValue,
 		ceilRaiseByValue,

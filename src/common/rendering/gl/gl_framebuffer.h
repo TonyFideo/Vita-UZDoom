@@ -95,9 +95,6 @@ public:
 	FTexture *WipeEndScreen() override;
 
 	int camtexcount = 0;
-
-	virtual bool HasNVidiaVRAMExt() override;
-	virtual bool HasATIVRAMExt() override;
 };
 
 }

@@ -74,7 +74,16 @@ SWSceneDrawer::~SWSceneDrawer()
 
 sector_t *SWSceneDrawer::RenderView(player_t *player)
 {
+#if defined(VITA)
+	// The Vita software framebuffer owns a CPU DCanvas and deliberately does
+	// not create the wrapper hardware texture used by the normal softpoly path.
+	// Select the direct-canvas branch from the actual framebuffer resource so
+	// this remains correct even if the archived video cvars describe a desktop
+	// backend.
+	if (screen->GetCanvas() == nullptr)
+#else
 	if (!V_IsTrueColor() || !screen->IsPoly())
+#endif
 	{
 		// Avoid using the pixel buffer from the last frame
 		FBTextureIndex = (FBTextureIndex + 1) % 2;

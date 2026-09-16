@@ -23,7 +23,7 @@
 
 #ifndef EGAMETYPE
 #define EGAMETYPE
-enum EGameType
+enum EGameType : int
 {
 	GAME_Any	 = 0,
 	GAME_Doom	 = 1,

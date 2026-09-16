@@ -44,6 +44,7 @@
 #include "v_video.h"
 #include "i_time.h"
 #include "m_argv.h"
+#include "d_main.h"
 #include "fragglescript/t_fs.h"
 #include "swrenderer/r_swrenderer.h"
 #include "flatvertices.h"
@@ -3155,7 +3156,17 @@ void MapLoader::LoadLevel(MapData *map, const char *lumpname, int position)
 	// If the original nodes being loaded are not GL nodes they will be kept around for
 	// use in P_PointInSubsector to avoid problems with maps that depend on the specific
 	// nodes they were built with (P:AR E1M3 is a good example for a map where this is the case.)
-	reloop |= CheckNodes(map, BuildGLNodes, (uint32_t)(endTime - startTime));
+	//
+	// The Vita software path does not consume GL nodes.  Do not move the regular nodes
+	// into the gameplay-only arrays and synthesize a second BSP here: on a stock Doom
+	// WAD that would allocate a large temporary structure before the first frame and
+	// then try to write a Vita cache which the software renderer never reads.
+#if defined(VITA)
+	if (V_IsHardwareRenderer())
+#endif
+	{
+		reloop |= CheckNodes(map, BuildGLNodes, (uint32_t)(endTime - startTime));
+	}
 
 	// set the head node for gameplay purposes. If the separate gamenodes array is not empty, use that, otherwise use the render nodes.
 	Level->headgamenode = Level->gamenodes.Size() > 0 ? &Level->gamenodes[Level->gamenodes.Size() - 1] : Level->nodes.Size() ? &Level->nodes[Level->nodes.Size() - 1] : nullptr;
@@ -3229,7 +3240,13 @@ void MapLoader::LoadLevel(MapData *map, const char *lumpname, int position)
 
 	InitRenderInfo();				// create hardware independent renderer resources for the level. This must be done BEFORE the PolyObj Spawn!!!
 	Level->ClearDynamic3DFloorData();	// CreateVBO must be run on the plain 3D floor data.
-	CreateVBO(screen->mVertexData, Level->sectors);
+	if (V_IsHardwareRenderer())
+	{
+		// The software renderer has no FFlatVertexBuffer.  The Vita software
+		// framebuffer deliberately keeps that hardware resource graph absent and
+		// presents the CPU canvas through a small GLES2 quad instead.
+		CreateVBO(screen->mVertexData, Level->sectors);
+	}
 
 	screen->InitLightmap(Level->LMTextureSize, Level->LMTextureCount, Level->LMTextureData);
 

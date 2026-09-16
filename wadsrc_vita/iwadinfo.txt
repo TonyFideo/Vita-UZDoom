@@ -1,0 +1,28 @@
+// Vita test/runtime IWAD table.  Keep this separate from game_support.pk3:
+// the full support archive contains thousands of optional resources that are
+// too expensive to load on the Vita heap, while the engine still needs an
+// IWADINFO entry to identify the bundled Doom 2 IWAD.
+
+IWad
+{
+	Name = "DOOM 2: Hell on Earth"
+	Autoname = "doom.id.doom2.commercial"
+	Game = "Doom"
+	Config = "Doom"
+	IWADName = "doom2.wad", 1
+	Mapinfo = "mapinfo/doom2.txt"
+	Compatibility = "Shorttex", "nosectionmerge"
+	MustContain = "MAP01"
+	BannerColors = "a8 00 00", "a8 a8 a8"
+	IgnoreTitlePatches = 1
+}
+
+Names
+{
+	"doom2.wad"
+}
+
+Order
+{
+	"DOOM 2: Hell on Earth"
+}

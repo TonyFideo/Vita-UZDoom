@@ -183,13 +183,27 @@ inline bool V_IsHardwareRenderer()
 // need to outright disable it.
 inline bool V_DisableIntelMipmap()
 {
+	#if defined(VITA)
+	return false;
+	#else
+	if (screen == nullptr || screen->vendorstring == nullptr)
+		return false;
+
 	constexpr char Intel[] = "Intel";
 	return !stricmp(screen->vendorstring, Intel) && (gl_texture_filter == 1 || gl_texture_filter == 5 || gl_texture_filter == 6);
+	#endif
 }
 
 inline bool V_IsTrueColor()
 {
+#if defined(VITA)
+	// Vita software rendering presents a CPU BGRA canvas through VitaGL.
+	// Treat both software CVar values as true color so the scene writes to the
+	// framebuffer canvas directly instead of requiring a hardware texture map.
+	return vid_rendermode != 4;
+#else
 	return vid_rendermode == 1 || vid_rendermode == 4;
+#endif
 }
 
 bool CheckCheatmode(bool printmsg = true, bool sponly = false);

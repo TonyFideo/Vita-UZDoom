@@ -405,7 +405,7 @@ CCMD (changeepisode)
 	if (argv.argc() > 1)
 	{
 		int ep = 0;
-		if (!C_IsValidInt(argv[1], ep) || ep < 1 || ep > AllEpisodes.SSize())
+		if (!C_IsValidInt(argv[1], ep) || ep < 1 || ep > AllEpisodes.Size())
 		{
 			Printf ("Episode %s is invalid.\n", argv[1]);
 			return;

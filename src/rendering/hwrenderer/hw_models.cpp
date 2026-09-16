@@ -32,14 +32,13 @@
 #include "hwrenderer/scene/hw_portal.h"
 #include "hw_bonebuffer.h"
 #include "hw_models.h"
-#include "actor.h"
 
 CVAR(Bool, gl_light_models, true, CVAR_ARCHIVE)
 
 VSMatrix FHWModelRenderer::GetViewToWorldMatrix()
 {
 	VSMatrix objectToWorldMatrix;
-	di->VPUniforms.ViewMatrix.inverseMatrix(objectToWorldMatrix);
+	di->VPUniforms.mViewMatrix.inverseMatrix(objectToWorldMatrix);
 	return objectToWorldMatrix;
 }
 
@@ -106,9 +105,9 @@ void FHWModelRenderer::SetInterpolation(double inter)
 	state.SetInterpolationFactor((float)inter);
 }
 
-void FHWModelRenderer::SetMaterial(FGameTexture *skin, bool clampNoFilter, FTranslationID translation, AActor * act)
+void FHWModelRenderer::SetMaterial(FGameTexture *skin, bool clampNoFilter, FTranslationID translation)
 {
-	state.SetMaterial(skin, UF_Skin, 0, clampNoFilter ? CLAMP_NOFILTER : CLAMP_NONE, translation, -1, act->GetClass());
+	state.SetMaterial(skin, UF_Skin, 0, clampNoFilter ? CLAMP_NOFILTER : CLAMP_NONE, translation, -1);
 	state.SetLightIndex(modellightindex);
 }
 

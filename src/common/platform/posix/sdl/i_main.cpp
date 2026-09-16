@@ -45,6 +45,9 @@
 #include "printf.h"
 #include "version.h"
 #include "zstring.h"
+#if defined(VITA)
+#include "vita_platform.h"
+#endif
 
 // MACROS ------------------------------------------------------------------
 
@@ -120,6 +123,13 @@ static int GetCrashInfo (char *buffer, char *end)
 
 FString I_DetectOS()
 {
+#if defined(VITA)
+	// Vita has no Unix userland or shell from which to query /etc/os-release.
+	// Keep the diagnostic deterministic and avoid pulling popen/pclose into the
+	// static link.
+	sys_ostype = "Vita";
+	return "Vita";
+#else
 	FString operatingSystem;
 
 	const char *paths[] = {"/etc/os-release", "/usr/lib/os-release"};
@@ -167,6 +177,7 @@ FString I_DetectOS()
 		operatingSystem = "Unknown";
 
 	return operatingSystem;
+#endif
 }
 
 void I_StartupJoysticks();
@@ -180,12 +191,16 @@ void I_StartupJoysticks();
 
 int main (int argc, char **argv)
 {
-#if !defined (__APPLE__)
+#if defined(VITA)
+	VitaPlatform::InitializeMemoryStats();
+#endif
+
+#if !defined (__APPLE__) && !defined(VITA)
 	{
 		int s[4] = { SIGSEGV, SIGILL, SIGFPE, SIGBUS };
 		cc_install_handlers(argc, argv, 4, s, GAMENAMELOWERCASE "-crash.log", GetCrashInfo);
 	}
-#endif // !__APPLE__
+#endif // !__APPLE__ && !VITA
 
 	signal(SIGINT, SignalHandler);
 	signal(SIGTERM, SignalHandler);
@@ -214,9 +229,19 @@ int main (int argc, char **argv)
 		return -1;
 	}
 
+#if defined(VITA)
+	// Front touch is intentionally not part of the Vita control scheme. The
+	// back surface is consumed as explicit virtual key events in i_input.cpp.
+	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+#endif
+
 	Args = new FArgs(argc, argv);
 
-#ifdef PROGDIR
+	#if defined(VITA)
+	// Vita launches the SELF from app0:. Keep resource lookup independent of
+	// the spelling of argv[0] supplied by the loader.
+	progdir = UZDOOM_VITA_PROGRAM_ROOT;
+	#elif defined(PROGDIR)
 	progdir = PROGDIR;
 #else
 	char program[PATH_MAX];

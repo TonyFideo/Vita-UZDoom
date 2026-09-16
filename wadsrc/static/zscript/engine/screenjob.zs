@@ -393,7 +393,8 @@ class ScreenJobRunner : Object UI
 		}
 		else if (ev.Type == InputEvent.Type_KeyDown)
 		{
-			if (ev.KeyScan >= InputEvent.Key_Pad_LThumb_Right && ev.KeyScan <= InputEvent.Key_Pad_Y)
+			if ((ev.KeyScan >= InputEvent.Key_Pad_LThumb_Right && ev.KeyScan <= InputEvent.Key_Pad_Y)
+					|| (ev.KeyScan >= InputEvent.Key_Pad_BackTouch_Left && ev.KeyScan <= InputEvent.Key_Pad_BackTouch_Hold))
 			{
 				lastInput = INP_CONTROLLER;
 			}

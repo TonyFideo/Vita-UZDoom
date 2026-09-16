@@ -26,7 +26,7 @@ class DDoor : public DMovingCeiling
 {
 	DECLARE_CLASS (DDoor, DMovingCeiling)
 public:
-	enum EVlDoor
+	enum EVlDoor : int
 	{
 		doorClose,
 		doorOpen,

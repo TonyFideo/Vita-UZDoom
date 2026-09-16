@@ -27,7 +27,9 @@
 #include <csignal>
 #include <stdio.h>
 #include <sys/time.h>
+#ifndef VITA
 #include <termios.h>
+#endif
 #include <unistd.h>
 
 #include "basics.h"
@@ -49,7 +51,9 @@ class FTTYStartupScreen : public FStartupScreen
 		bool DidNetInit;
 		int NetMaxPos, NetCurPos;
 		const char *TheNetMessage;
+#ifndef VITA
 		termios OldTermIOS;
+#endif
 };
 
 // EXTERNAL FUNCTION PROTOTYPES --------------------------------------------

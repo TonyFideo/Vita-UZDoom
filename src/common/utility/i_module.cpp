@@ -23,7 +23,9 @@
 
 #include "i_module.h"
 
-#ifdef _WIN32
+#if defined(VITA)
+using HMODULE = void*;
+#elif defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
@@ -31,7 +33,7 @@
 #endif
 
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(VITA)
 #define LoadLibraryA(x) dlopen((x), RTLD_LAZY)
 #define GetProcAddress(a,b) dlsym((a),(b))
 #define FreeLibrary(x) dlclose((x))
@@ -66,13 +68,19 @@ void FModule::Unload()
 {
 	if(handle)
 	{
+		#ifndef VITA
 		FreeLibrary((HMODULE)handle);
+		#endif
 		handle = nullptr;
 	}
 }
 
 bool FModule::Open(const char* lib)
 {
+#ifdef VITA
+	(void)lib;
+	return false;
+#else
 #ifdef _WIN32
 	if((handle = GetModuleHandleA(lib)) != nullptr)
 		return true;
@@ -80,14 +88,20 @@ bool FModule::Open(const char* lib)
 	// Loading an empty string in Linux doesn't do what we expect it to.
 	if(*lib == '\0')
 		return false;
-#endif
+	#endif
 	handle = LoadLibraryA(lib);
 	return handle != nullptr;
+#endif
 }
 
 void *FModule::GetSym(const char* name)
 {
+	#ifdef VITA
+	(void)name;
+	return nullptr;
+	#else
 	return (void *)GetProcAddress((HMODULE)handle, name);
+	#endif
 }
 
 std::string module_progdir(".");	// current program directory used to look up dynamic libraries. Default to something harmless in case the user didn't set it.

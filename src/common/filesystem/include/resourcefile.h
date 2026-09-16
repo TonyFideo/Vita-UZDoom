@@ -199,7 +199,7 @@ public:
 		return (entry < NumLumps) ? Entries[entry].Position : 0;
 	}
 
-    uint32_t GetEntryHash(uint32_t entry)
+	size_t GetEntryHash(uint32_t entry)
 	{
 		return (entry < NumLumps) ? Entries[entry].CRC32 : 0;
 	}

@@ -81,6 +81,12 @@ auto tm_zone(const std::tm& tm) -> decltype(tzname[0]) {
   const bool is_dst = tm.tm_isdst > 0;
   return tzname[is_dst];
 }
+#elif defined(VITA)
+// Vita's struct tm does not expose the non-standard tm_gmtoff/tm_zone
+// extensions.  The port has no zoneinfo-backed local timezone service yet;
+// use UTC as the stable fallback until one is provided by the platform layer.
+auto tm_gmtoff(const std::tm&) -> int { return 0; }
+const char* tm_zone(const std::tm&) { return "UTC"; }
 #else
 // Adapt to different spellings of the struct std::tm extension fields.
 #if defined(tm_gmtoff)

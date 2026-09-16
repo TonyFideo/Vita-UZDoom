@@ -228,6 +228,69 @@ static TMap<SDL_Scancode, uint8_t> InitKeyScanMap ()
 }
 static const TMap<SDL_Scancode, uint8_t> KeyScanToDIK(InitKeyScanMap());
 
+#if defined(VITA)
+// SDL's Vita backend reports the front and back touch surfaces as touch IDs
+// 1 and 2 respectively. Keep each finger's initial half so moving a finger
+// across the center does not change the action it will release.
+struct VitaBackTouchFinger
+{
+	SDL_FingerID Id;
+	int ZoneKey;
+};
+
+static TArray<VitaBackTouchFinger> VitaBackTouchFingers;
+
+static void PostVitaBackTouchKey(int key, bool down)
+{
+	event_t event = { 0, 0, 0, 0, 0, 0, 0 };
+	event.type = down ? EV_KeyDown : EV_KeyUp;
+	event.data1 = key;
+	D_PostEvent(&event);
+}
+
+static void ProcessVitaBackTouch(const SDL_TouchFingerEvent &touch, bool down)
+{
+	if (touch.touchId != 2) return; // Vita SDL: 2 is the back touch surface.
+
+	const int zoneKey = touch.x >= 0.5f ? KEY_PAD_BACKTOUCH_RIGHT : KEY_PAD_BACKTOUCH_LEFT;
+	const unsigned int index = VitaBackTouchFingers.FindEx([&](const VitaBackTouchFinger &finger)
+	{
+		return finger.Id == touch.fingerId;
+	});
+
+	if (down)
+	{
+		if (index < VitaBackTouchFingers.Size()) return;
+
+		const bool firstFinger = VitaBackTouchFingers.Size() == 0;
+		const bool firstFingerInZone = VitaBackTouchFingers.FindEx([&](const VitaBackTouchFinger &finger)
+		{
+			return finger.ZoneKey == zoneKey;
+		}) >= VitaBackTouchFingers.Size();
+		VitaBackTouchFingers.Push({ touch.fingerId, zoneKey });
+		if (firstFingerInZone)
+			PostVitaBackTouchKey(zoneKey, true);
+		if (firstFinger)
+			PostVitaBackTouchKey(KEY_PAD_BACKTOUCH_HOLD, true);
+	}
+	else
+	{
+		if (index >= VitaBackTouchFingers.Size()) return;
+
+		const int storedZoneKey = VitaBackTouchFingers[index].ZoneKey;
+		VitaBackTouchFingers.Delete(index);
+		const bool lastFingerInZone = VitaBackTouchFingers.FindEx([&](const VitaBackTouchFinger &finger)
+		{
+			return finger.ZoneKey == storedZoneKey;
+		}) >= VitaBackTouchFingers.Size();
+		if (lastFingerInZone)
+			PostVitaBackTouchKey(storedZoneKey, false);
+		if (VitaBackTouchFingers.Size() == 0)
+			PostVitaBackTouchKey(KEY_PAD_BACKTOUCH_HOLD, false);
+	}
+}
+#endif
+
 static void I_CheckGUICapture ()
 {
 	bool wantCapt = sysCallbacks.WantGuiCapture && sysCallbacks.WantGuiCapture();
@@ -603,6 +666,16 @@ void MessagePump (const SDL_Event &sev)
 			}
 		}
 		break;
+
+#if defined(VITA)
+	case SDL_FINGERDOWN:
+		ProcessVitaBackTouch(sev.tfinger, true);
+		break;
+
+	case SDL_FINGERUP:
+		ProcessVitaBackTouch(sev.tfinger, false);
+		break;
+#endif
 
 	case SDL_JOYBUTTONDOWN:
 	case SDL_JOYBUTTONUP:

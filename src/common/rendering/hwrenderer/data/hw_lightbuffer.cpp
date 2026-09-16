@@ -19,6 +19,10 @@
 #include "hw_dynlightdata.h"
 #include "shaderuniforms.h"
 
+#if defined(VITA)
+#include "common/platform/vita/vita_platform.h"
+#endif
+
 static const int ELEMENTS_PER_LIGHT = 4;			// each light needs 4 vec4's.
 static const int ELEMENT_SIZE = (4*sizeof(float));
 
@@ -26,7 +30,14 @@ static const int ELEMENT_SIZE = (4*sizeof(float));
 FLightBuffer::FLightBuffer(int pipelineNbr):
 	mPipelineNbr(pipelineNbr)
 {
+#if defined(VITA)
+	// The desktop reserve is intentionally conservative but costs 5.12 MiB
+	// per pipeline before any scene is rendered.  Vita maps do not approach
+	// this number of dynamic-light vec4 entries.
+	int maxNumberOfLights = UZDOOM_VITA_HW_LIGHT_BUFFER_ENTRIES;
+#else
 	int maxNumberOfLights = 80000;
+#endif
 
 	mBufferSize = maxNumberOfLights * ELEMENTS_PER_LIGHT;
 	mByteSize = mBufferSize * ELEMENT_SIZE;

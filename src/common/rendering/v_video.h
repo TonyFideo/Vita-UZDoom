@@ -63,8 +63,6 @@ enum EHWCaps
 
 	RFL_INVALIDATE_BUFFER = 64,
 	RFL_DEBUG = 128,
-	RFL_ATI_MEM = 256,
-	RFL_NV_MEM = 512,
 };
 
 enum {
@@ -169,9 +167,6 @@ public:
 	virtual bool IsPoly() { return false; }
 	virtual int GetShaderCount();
 	virtual bool CompileNextShader() { return true; }
-	virtual bool HasNVidiaVRAMExt() { return false; }
-	virtual bool HasATIVRAMExt() { return false; }
-	virtual bool HasVulkanVRAMExt() { return false; }
 	void SetAABBTree(hwrenderer::LevelAABBTree * tree)
 	{
 		mShadowMap.SetAABBTree(tree);
@@ -257,7 +252,6 @@ public:
 
 	// Report a game restart
 	void SetClearColor(int color);
-	void SetClearColorPal(PalEntry pe);
 	virtual int Backend() { return 0; }
 	virtual const char* DeviceName() const { return "Unknown"; }
 	virtual void AmbientOccludeScene(float m5) {}

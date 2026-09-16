@@ -2,8 +2,6 @@ make_release_only()
 
 add_library(opn OBJECT)
 
-include(models/opn_models.cmake)
-
 target_sources(opn
 PRIVATE
 	opnmidi_load.cpp
@@ -35,7 +33,6 @@ PRIVATE
 	chips/nuked_lle/nopn2f.c
 	chips/nuked_lle/fmopn2.c
 	wopn/wopn_file.c
-	${OPN_MODELS_SOURCES}
 )
 
 if(COMPILER_SUPPORTS_CXX14)

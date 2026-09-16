@@ -25,6 +25,7 @@
 #include "hw_cvars.h"
 #include "gles_shaderprogram.h"
 #include "hw_shaderpatcher.h"
+#include "hwrenderer/data/buffers.h"
 #include "filesystem.h"
 #include "printf.h"
 #include "cmdlib.h"
@@ -100,6 +101,11 @@ void FShaderProgram::Compile(ShaderType type, const char *name, const FString &c
 	mShaderSources[type] = PatchShader(type, code, defines, maxGlslVersion);
 }
 
+void FShaderProgram::BindAttribLocation(int index, const char *name)
+{
+	attribstobind.Push({ FString(name), index });
+}
+
 void FShaderProgram::CompileShader(ShaderType type)
 {
 	CreateShader(type);
@@ -149,6 +155,11 @@ void FShaderProgram::Link(const char *name)
 		CompileShader(Vertex);
 		CompileShader(Fragment);
 
+		for (auto &attr : attribstobind)
+		{
+			glBindAttribLocation(mProgram, attr.second, attr.first.GetChars());
+		}
+
 		glLinkProgram(mProgram);
 
 		GLint status = 0;
@@ -158,6 +169,8 @@ void FShaderProgram::Link(const char *name)
 			I_FatalError("Link Shader '%s':\n%s\n", name, GetProgramInfoLog(mProgram).GetChars());
 		}
 	}
+	attribstobind.Clear();
+	attribstobind.ShrinkToFit();
 
 	// This is only for old OpenGL which didn't allow to set the binding from within the shader.
 	if (screen->glslversion < 4.20)
@@ -268,6 +281,10 @@ void FPresentShaderBase::Init(const char * vtx_shader_name, const char * program
 	mShader.reset(new FShaderProgram());
 	mShader->Compile(FShaderProgram::Vertex, "shaders_gles/pp/screenquad.vp", prolog.GetChars(), 330);
 	mShader->Compile(FShaderProgram::Fragment, vtx_shader_name, prolog.GetChars(), 330);
+	// VitaGL's automatic attribute order is not guaranteed to match the VBO
+	// layout.  The screen quad uses the common renderer locations explicitly.
+	mShader->BindAttribLocation(VATTR_VERTEX, "PositionInProjection");
+	mShader->BindAttribLocation(VATTR_TEXCOORD, "UV");
 	mShader->Link(program_name);
 	mShader->Bind();
 	Uniforms.Init();

@@ -297,7 +297,7 @@ void FRandom::StaticWriteRNGState (FSerializer &arc)
 				if (arc.BeginObject(nullptr))
 				{
 					arc("crc", rng->NameCRC)
-						.Array("u", s32)
+						.Array("u", s32.data(), s32.size())
 						.EndObject();
 				}
 			}
@@ -340,7 +340,7 @@ void FRandom::StaticReadRNGState(FSerializer &arc)
 					auto s32 = rng->s32();
 					if (rng->NameCRC == crc)
 					{
-						arc.Array("u", s32);
+						arc.Array("u", s32.data(), s32.size());
 						rng->from_s32(s32);
 						break;
 					}

@@ -167,12 +167,16 @@ void Draw2D(F2DDrawer* drawer, FRenderState& state, int x, int y, int width, int
 			state.EnableModelMatrix(true);
 		}
 
-		if (cmd.mTexture != nullptr && cmd.mTexture->isValid())
+		// A software framebuffer can queue a valid game-texture handle before
+		// its backing FTexture exists.  The GLES material path cannot create a
+		// texture from a null FTexture, so treat that command as an untextured
+		// draw until the source has been materialized.
+		if (cmd.mTexture != nullptr && cmd.mTexture->isValid() && cmd.mTexture->GetTexture() != nullptr)
 		{
 			auto flags = cmd.mTexture->GetUseType() >= ETextureType::Special? UF_None : cmd.mTexture->GetUseType() == ETextureType::FontChar? UF_Font : UF_Texture;
 
 			auto scaleflags = cmd.mFlags & F2DDrawer::DTF_Indexed ? CTF_Indexed : 0;
-			state.SetMaterial(cmd.mTexture, flags, scaleflags, cmd.mFlags & F2DDrawer::DTF_Wrap ? CLAMP_NONE : (cache_hw_2dmip ? CLAMP_XY : CLAMP_XY_NOMIP), cmd.mTranslationId, -1, nullptr);
+			state.SetMaterial(cmd.mTexture, flags, scaleflags, cmd.mFlags & F2DDrawer::DTF_Wrap ? CLAMP_NONE : (cache_hw_2dmip ? CLAMP_XY : CLAMP_XY_NOMIP), cmd.mTranslationId, -1);
 			state.EnableTexture(true);
 
 			// Canvas textures are stored upside down
@@ -240,7 +244,8 @@ void Draw2D(F2DDrawer* drawer, FRenderState& state, int x, int y, int width, int
 	state.SetScissor(-1, -1, -1, -1);
 
 	state.SetRenderStyle(STYLE_Translucent);
-	state.SetVertexBuffer(screen->mVertexData);
+	if (screen->mVertexData != nullptr)
+		state.SetVertexBuffer(screen->mVertexData);
 	state.EnableStencil(false);
 	state.SetStencil(0, SOP_Keep, SF_AllOn);
 	state.EnableTexture(true);

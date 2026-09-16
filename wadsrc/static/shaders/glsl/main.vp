@@ -15,6 +15,38 @@
 **
 */
 
+layout(location = 0) in vec4 aPosition;
+layout(location = 1) in vec2 aTexCoord;
+layout(location = 2) in vec4 aColor;
+
+layout(location = 0) out vec4 vTexCoord;
+layout(location = 1) out vec4 vColor;
+#ifdef VITA_DISABLE_CLIP_VARYINGS
+layout(location = 7) out vec3 vLightmap;
+#else
+layout(location = 9) out vec3 vLightmap;
+#endif
+
+#ifndef SIMPLE	// we do not need these for simple shaders
+layout(location = 3) in vec4 aVertex2;
+layout(location = 4) in vec4 aNormal;
+layout(location = 5) in vec4 aNormal2;
+layout(location = 6) in vec3 aLightmap;
+layout(location = 7) in vec4 aBoneWeight;
+layout(location = 8) in uvec4 aBoneSelector;
+
+layout(location = 2) out vec4 pixelpos;
+layout(location = 3) out vec3 glowdist;
+layout(location = 4) out vec3 gradientdist;
+layout(location = 5) out vec4 vWorldNormal;
+layout(location = 6) out vec4 vEyeNormal;
+#endif
+
+#if defined(NO_CLIPDISTANCE_SUPPORT) && !defined(VITA_DISABLE_CLIP_VARYINGS)
+layout(location = 7) out vec4 ClipDistanceA;
+layout(location = 8) out vec4 ClipDistanceB;
+#endif
+
 struct BonesResult
 {
 	vec3 Normal;
@@ -84,6 +116,10 @@ void main()
 
 		vWorldNormal = vec4(normalize((NormalModelMatrix * vec4(normalize(bones.Normal), 1.0)).xyz), 1.0);
 		vEyeNormal = vec4(normalize((NormalViewMatrix * vec4(normalize(vWorldNormal.xyz), 1.0)).xyz), 1.0);
+	#else
+		// The fragment shader always tests this varying.  Leave lightmaps
+		// explicitly disabled instead of passing undefined data on Vita/GXM.
+		vLightmap = vec3(0.0, 0.0, -1.0);
 	#endif
 
 	#ifdef SPHEREMAP
@@ -126,7 +162,11 @@ void main()
 		ClipDistance4 = 1.0;
 	}
 
-#ifdef NO_CLIPDISTANCE_SUPPORT
+#if defined(VITA_DISABLE_CLIP_VARYINGS)
+	// VitaGL exposes eight varying vectors. The remaining shader interface
+	// already consumes all eight, so clipping is disabled on Vita instead of
+	// overflowing the vertex/fragment varying link.
+#elif defined(NO_CLIPDISTANCE_SUPPORT)
 	ClipDistanceA = vec4(ClipDistance0, ClipDistance1, ClipDistance2, ClipDistance3);
 	ClipDistanceB = vec4(ClipDistance4, 0.0, 0.0, 0.0);
 #else

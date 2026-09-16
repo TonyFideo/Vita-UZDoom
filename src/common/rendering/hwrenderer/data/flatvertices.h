@@ -26,6 +26,9 @@
 
 #include "tarray.h"
 #include "hwrenderer/data/buffers.h"
+#if defined(VITA)
+#include "common/platform/vita/vita_platform.h"
+#endif
 #include <atomic>
 #include <mutex>
 
@@ -97,7 +100,11 @@ public:
 
 	unsigned int mMapStart;
 
+#if defined(VITA)
+	static const unsigned int BUFFER_SIZE = UZDOOM_VITA_HW_VERTEX_BUFFER_SIZE;
+#else
 	static const unsigned int BUFFER_SIZE = 2000000;
+#endif
 	static const unsigned int BUFFER_SIZE_TO_USE = BUFFER_SIZE-500;
 
 public:
