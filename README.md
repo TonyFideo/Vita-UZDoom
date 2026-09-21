@@ -1,3 +1,10 @@
+## Vita-UZDoom
+
+Research repo, it has a "broken edge" build which got broken partially into rendering and the AI couldn't fix, doesn't reflect the author.
+
+
+
+
 <div align="center">
 
 [ <img src="branding/misc/logo-bg.svg" alt="UZDoom Icon" style="height: 8em; width: 100%" /> ][repo]
